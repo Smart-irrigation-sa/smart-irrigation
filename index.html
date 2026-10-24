@@ -113,13 +113,20 @@ button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visi
 .tl{padding-inline:26px}
 .tl-track{position:relative;height:18px;border-radius:9px;margin-top:40px;cursor:pointer;touch-action:manipulation;
   background:linear-gradient(to left,var(--night) 0%,var(--night) 22%,var(--sky1) 30%,var(--sky1) 70%,var(--night) 78%,var(--night) 100%)}
-.tl-fill{position:absolute;inset-block:0;right:0;border-radius:9px;background:var(--water);opacity:.45;pointer-events:none}
+.tl-fill{position:absolute;inset-block:0;inset-inline-start:0;border-radius:9px;background:var(--water);opacity:.45;pointer-events:none}
 .tl-tick{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--surface);opacity:.8;pointer-events:none}
 .tl-now{position:absolute;top:50%;width:28px;height:28px;border-radius:50%;background:var(--surface);border:5px solid var(--water);transform:translate(50%,-50%);pointer-events:none;box-shadow:0 2px 6px rgba(0,0,0,.2)}
 .tl-now span{position:absolute;bottom:32px;left:50%;transform:translateX(-50%);font-family:var(--f-display);font-weight:800;font-size:1.05rem;white-space:nowrap;
   background:var(--ink);color:var(--bg);padding:2px 10px;border-radius:10px}
 .tl-labels{position:relative;height:40px;margin-top:6px}
 .tl-labels span{position:absolute;transform:translateX(50%);width:4.2em;text-align:center;line-height:1.3;font-size:.78rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.head-tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.lang-btn{display:inline-flex;align-items:center;gap:7px;padding:7px 14px;border-radius:999px;border:2px solid var(--water);background:var(--surface);color:var(--water);font-weight:700;font-size:.92rem}
+.lang-btn:hover{background:var(--water-soft)}
+[dir="ltr"] .tl-track{background:linear-gradient(to right,var(--night) 0%,var(--night) 22%,var(--sky1) 30%,var(--sky1) 70%,var(--night) 78%,var(--night) 100%)}
+[dir="ltr"] .tl-now{transform:translate(-50%,-50%)}
+[dir="ltr"] .tl-labels span{transform:translateX(-50%)}
+[dir="ltr"] .tl-tick{transform:translateX(-50%)}
 .tl-hint{font-size:.8rem;color:var(--muted);text-align:center}
 .controls{display:flex;flex-direction:column;gap:12px;padding:16px;border-radius:22px;background:var(--surface);border:1px solid var(--line)}
 .chips{display:flex;flex-wrap:wrap;gap:8px}
@@ -651,24 +658,35 @@ function(a,b,c){if(!Vd(b))throw Error(m(200));return Wd(null,a,b,!1,c)};Q.unmoun
 const {useState,useEffect,useRef} = React;
 const html = htm.bind(React.createElement);
 
+/* ================= اللغة / Language ================= */
+let LANG = 'ar';
+const tr = (a, e) => LANG === 'en' ? e : a;
+const T = p => Array.isArray(p) ? tr(p[0], p[1]) : p;
+const withLang = (l, fn) => { const o = LANG; LANG = l; try{ return fn(); } finally { LANG = o; } };
+const bi = fn => ({ar:withLang('ar', fn), en:withLang('en', fn)});
+const L = x => x && typeof x === 'object' && !Array.isArray(x) && 'ar' in x ? x[LANG] : x;
+
 /* ================= ثوابت وتنسيق ================= */
 const CAP = 1000;     // سعة الخزان الأرضي (لتر) — قيمة معلنة للنموذج
 const NOMINAL = 4;    // التدفق المتوقع لكل خط مفتوح (لتر/دقيقة) — يُقاس عند التركيب
 const WET_RATE = 20;  // سرعة ابتلال التربة أثناء الري (٪ في الساعة) — رقم محاكاة
 const DIG = '٠١٢٣٤٥٦٧٨٩';
-const ad = s => String(s).replace(/\d/g, d => DIG[d]).replace(/\./g, '٫');
+const ad = s => LANG === 'en' ? String(s) : String(s).replace(/\d/g, d => DIG[d]).replace(/\./g, '٫');
 const n0 = v => ad(Math.round(v));
 const n1 = v => ad(Math.round(v * 10) / 10);
-const P = v => n0(v) + '٪';
-const names = a => a.map(z => z.name).join(' و');
-const clockStr = m => { const t = ((Math.floor(m) % 1440) + 1440) % 1440, h = Math.floor(t / 60); return ad((h % 12 || 12) + ':' + String(t % 60).padStart(2, '0')) + (h < 12 ? ' صباحًا' : ' مساءً'); };
+const P = v => n0(v) + tr('٪', '%');
+const LPM = () => tr('ل/د', 'L/min');
+const zn = z => tr('المنطقة ' + ad(z.idx + 1), 'Zone ' + (z.idx + 1));
+const names = a => a.map(zn).join(tr(' و', ' and '));
+const clockStr = m => { const t = ((Math.floor(m) % 1440) + 1440) % 1440, h = Math.floor(t / 60);
+  return ad((h % 12 || 12) + ':' + String(t % 60).padStart(2, '0')) + tr(h < 12 ? ' صباحًا' : ' مساءً', h < 12 ? ' AM' : ' PM'); };
 function dur(h){
-  if(!isFinite(h) || h < 0) return 'غير محدد';
-  if(h < 0.9){ const m = Math.max(10, Math.round(h * 6) * 10); return m >= 60 ? 'نحو ساعة' : `نحو ${ad(m)} ${m <= 10 ? 'دقائق' : 'دقيقة'}`; }
-  if(h < 20){ const r = Math.round(h); if(r <= 1) return 'نحو ساعة'; if(r === 2) return 'نحو ساعتين'; return `نحو ${ad(r)} ${r <= 10 ? 'ساعات' : 'ساعة'}`; }
+  if(!isFinite(h) || h < 0) return tr('غير محدد', 'unknown');
+  if(h < 0.9){ const m = Math.max(10, Math.round(h * 6) * 10); return m >= 60 ? tr('نحو ساعة', 'about an hour') : tr(`نحو ${ad(m)} ${m <= 10 ? 'دقائق' : 'دقيقة'}`, `about ${m} minutes`); }
+  if(h < 20){ const r = Math.round(h); if(r <= 1) return tr('نحو ساعة', 'about an hour'); if(r === 2) return tr('نحو ساعتين', 'about 2 hours'); return tr(`نحو ${ad(r)} ${r <= 10 ? 'ساعات' : 'ساعة'}`, `about ${r} hours`); }
   const d = Math.round(h / 12) / 2;
-  if(d <= 1) return 'نحو يوم'; if(d === 1.5) return 'نحو يوم ونصف'; if(d === 2) return 'نحو يومين'; if(d === 2.5) return 'نحو يومين ونصف';
-  const r = Math.round(d); return `نحو ${ad(r)} ${r <= 10 ? 'أيام' : 'يومًا'}`;
+  if(d <= 1) return tr('نحو يوم', 'about a day'); if(d === 1.5) return tr('نحو يوم ونصف', 'about a day and a half'); if(d === 2) return tr('نحو يومين', 'about 2 days'); if(d === 2.5) return tr('نحو يومين ونصف', 'about 2.5 days');
+  const r = Math.round(d); return tr(`نحو ${ad(r)} ${r <= 10 ? 'أيام' : 'يومًا'}`, `about ${r} days`);
 }
 
 /* ================= أيقونات ================= */
@@ -691,6 +709,7 @@ const I = {
   check:'M5 12l5 5 9-10',
   alert:'M12 3l10 18H2zM12 10v5M12 18v.01',
   doc:'M6 3h9l4 4v14H6zM14 3v5h5M9 12h7M9 16h7',
+  globe:'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z',
 };
 const Icon = ({d, s = 22}) => html`<svg width=${s} height=${s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d=${d}/></svg>`;
 
@@ -698,16 +717,16 @@ const Icon = ({d, s = 22}) => html`<svg width=${s} height=${s} viewBox="0 0 24 2
 // تصنيف LED في المشروع: أحمر جافة < ٣٠٪، أخضر مثالية ٣٠–٧٠٪، أزرق مشبعة > ٧٠٪
 const LED_DRY = 30, LED_WET = 70;
 const ledOf = m => m < LED_DRY ? 'dry' : m > LED_WET ? 'wet' : 'ok';
-const LED_TXT = {dry:'أحمر · جافة', ok:'أخضر · مثالية', wet:'أزرق · مشبعة'};
+const ledTxt = k => ({dry:tr('أحمر · جافة', 'Red · dry'), ok:tr('أخضر · مثالية', 'Green · ideal'), wet:tr('أزرق · مشبعة', 'Blue · saturated')})[k];
 const LED_COL = {dry:'var(--crit)', ok:'var(--green)', wet:'var(--water)'};
-const ZONES0 = [{name:'المنطقة ١', base:0.9}, {name:'المنطقة ٢', base:1.0}, {name:'المنطقة ٣', base:0.8}];
+const ZONES0 = [{base:0.9}, {base:1.0}, {base:0.8}];
 const DEFAULT_SET = {start:[30,30,30], stop:[60,60,60], tankMin:15, tankResume:20, tankWarn:25, tankFull:92};
 const SCEN = {
-  normal:  {label:'يوم عادي', icon:I.leaf, tank:68, moist:[48,45,58], line:[1,1,1], ff:1, filling:false, temp:31, avgDaily:300, consumed:110, clock:9*60},
-  hot:     {label:'يوم حار جدًا', icon:I.sun, tank:64, moist:[40,36,44], line:[1,1,1], ff:1, filling:false, temp:45, avgDaily:470, consumed:190, clock:13*60},
-  lowflow: {label:'انخفاض التدفق في خط', icon:I.drop, tank:82, moist:[28,26,55], line:[1,0.45,1], ff:1, filling:false, temp:33, avgDaily:300, consumed:140, clock:10*60+30},
-  lowtank: {label:'الخزان ينفد', icon:I.low, tank:19, moist:[27,45,50], line:[1,1,1], ff:1, filling:false, temp:32, avgDaily:320, consumed:260, clock:16*60},
-  filling: {label:'الصهريج يعبّئ الخزان', icon:I.truck, tank:84, moist:[53,49,60], line:[1,1,1], ff:1, filling:true, temp:30, avgDaily:300, consumed:60, clock:7*60+40},
+  normal:  {label:['يوم عادي', 'Normal day'], icon:I.leaf, tank:68, moist:[48,45,58], line:[1,1,1], ff:1, filling:false, temp:31, avgDaily:300, consumed:110, clock:9*60},
+  hot:     {label:['يوم حار جدًا', 'Very hot day'], icon:I.sun, tank:64, moist:[40,36,44], line:[1,1,1], ff:1, filling:false, temp:45, avgDaily:470, consumed:190, clock:13*60},
+  lowflow: {label:['انخفاض التدفق في خط', 'Low flow in one line'], icon:I.drop, tank:82, moist:[28,26,55], line:[1,0.45,1], ff:1, filling:false, temp:33, avgDaily:300, consumed:140, clock:10*60+30},
+  lowtank: {label:['الخزان ينفد', 'Tank running low'], icon:I.low, tank:19, moist:[27,45,50], line:[1,1,1], ff:1, filling:false, temp:32, avgDaily:320, consumed:260, clock:16*60},
+  filling: {label:['الصهريج يعبّئ الخزان', 'Tanker filling the tank'], icon:I.truck, tank:84, moist:[53,49,60], line:[1,1,1], ff:1, filling:true, temp:30, avgDaily:300, consumed:60, clock:7*60+40},
 };
 const heatOf = t => Math.max(0.6, 1 + (t - 30) / 10);
 
@@ -719,10 +738,10 @@ function seedHist(m, rate, set, i){
 }
 function init(key, set){
   const s = SCEN[key];
-  const zones = ZONES0.map((z, i) => ({name:z.name, base:z.base, m:s.moist[i], obsRate:z.base * heatOf(s.temp), want:false, valve:false, flow:0, expected:0, hist:seedHist(s.moist[i], z.base * heatOf(s.temp), set, i)}));
+  const zones = ZONES0.map((z, i) => ({idx:i, base:z.base, m:s.moist[i], obsRate:z.base * heatOf(s.temp), want:false, valve:false, flow:0, expected:0, hist:seedHist(s.moist[i], z.base * heatOf(s.temp), set, i)}));
   const st = {key, clock:s.clock, tankL:s.tank * CAP / 100, consumed:s.consumed, filling:s.filling, inflow:10, ff:s.ff, line:[...s.line], temp:s.temp, avgDaily:s.avgDaily,
     pump:false, flow:0, expected:0, lowFlowMin:0, lockout:false, protect:false, siren:false, buzzer:false, zones, sampleAcc:0, alerts:[], seq:0, overflow:false,
-    flags:{}, log:[{w:'you', m:'بدأ سيناريو: ' + s.label, t:s.clock, id:0}], logSeq:0};
+    flags:{}, log:[{w:'you', m:bi(() => tr('بدأ سيناريو: ', 'Scenario started: ') + T(s.label)), t:s.clock, id:0}], logSeq:0};
   return evaluate(control(st, set), set);
 }
 const tankPct = st => st.tankL / CAP * 100;
@@ -739,7 +758,7 @@ function control(st, set){
     return {...z, valve, expected, flow:valve ? NOMINAL * st.ff * st.line[i] * noise : 0}; });
   const expected = zones.reduce((a, z) => a + z.expected, 0), flow = zones.reduce((a, z) => a + z.flow, 0);
   const siren = st.filling && pct >= set.tankFull;      // صفارة الامتلاء لسائق الصهريج
-  const buzzer = protect || st.lockout;                  // تنبيه جفاف الخزان / حماية المضخة
+  const buzzer = protect || st.lockout;                  // تنبيه انخفاض مستوى المياه / حماية المضخة
   return {...st, zones, pump, protect, expected, flow, siren, buzzer};
 }
 function physics(st, min){
@@ -771,68 +790,71 @@ function flowPattern(st){
   if(low.length === open.length) return {type:'common', open, low};
   return {type:'local', open, low};
 }
-const CAUSES = {
-  common:['الفلتر الرئيسي متّسخ','ضعف أداء المضخة','هواء في الخط الرئيسي'],
-  local:['انسداد جزئي في أنبوب هذا الخط','الصمام لا يفتح بالكامل','رشاش مسدود','تسرّب قبل الحساس'],
-};
+const causesCommon = () => [tr('الفلتر الرئيسي متّسخ', 'Main filter clogged'), tr('ضعف أداء المضخة', 'Weak pump performance'), tr('هواء في الخط الرئيسي', 'Air in the main line')];
+const causesLocal = () => [tr('انسداد جزئي في أنبوب هذا الخط', 'Partial blockage in this line\'s pipe'), tr('الصمام لا يفتح بالكامل', 'Valve not opening fully'), tr('رشاش مسدود', 'Clogged sprinkler'), tr('تسرّب قبل الحساس', 'Leak before the sensor')];
 
 /* ================= التنبيهات ================= */
 function conditions(st, set){
   const pct = tankPct(st), out = [];
   const fp = flowPattern(st);
   if(fp && fp.type !== 'ok'){
-    const lines = fp.open.map(z => `${z.name}: ${n1(z.flow)} من ${n1(z.expected)} ل/د`).join('، ');
+    const lines = fp.open.map(z => `${zn(z)}: ${n1(z.flow)} ${tr('من', 'of')} ${n1(z.expected)} ${LPM()}`).join(tr('، ', '; '));
     const t = fp.type;
-    out.push({key:'flow-' + t + fp.low.map(z => z.name).join(''), pr:'mid', who:'rule',
-      title: t === 'common' ? 'تدفق ضعيف في كل الخطوط المفتوحة' : t === 'local' ? `تدفق ضعيف في خط ${names(fp.low)} فقط` : `تدفق ضعيف في خط ${names(fp.low)}`,
-      obs:`قراءات حساسات التدفق: ${lines}.` + (t === 'single' ? ' خط واحد مفتوح، فلا يمكن المقارنة مع خط آخر.' : t === 'local' ? ' الخطوط الأخرى طبيعية، فالمشكلة على الأرجح في هذا الخط.' : ' الضعف مشترك، فالسبب على الأرجح قبل التفرّع.'),
-      causes: t === 'common' ? CAUSES.common : t === 'local' ? CAUSES.local : [...CAUSES.common, ...CAUSES.local],
-      action: t === 'common' ? 'افحص الفلتر الرئيسي ثم المضخة. السبب يُؤكَّد بالفحص.' : t === 'local' ? `افحص صمام ${names(fp.low)} وأنبوبه ورشاشه. السبب يُؤكَّد بالفحص.` : 'افحص الفلتر ثم الصمام والرشاش. السبب يُؤكَّد بالفحص.'});
+    out.push({key:'flow-' + t + fp.low.map(z => z.idx).join(''), pr:'mid', who:'rule',
+      title: t === 'common' ? tr('تدفق ضعيف في كل الخطوط المفتوحة', 'Low flow in all open lines') : t === 'local' ? tr(`تدفق ضعيف في خط ${names(fp.low)} فقط`, `Low flow in the ${names(fp.low)} line only`) : tr(`تدفق ضعيف في خط ${names(fp.low)}`, `Low flow in the ${names(fp.low)} line`),
+      obs:tr(`قراءات حساسات التدفق: ${lines}.`, `Flow sensor readings: ${lines}.`) + (t === 'single' ? tr(' خط واحد مفتوح، فلا يمكن المقارنة مع خط آخر.', ' Only one line is open, so no comparison is possible.') : t === 'local' ? tr(' الخطوط الأخرى طبيعية، فالمشكلة على الأرجح في هذا الخط.', ' The other lines are normal, so the problem is most likely in this line.') : tr(' الضعف مشترك، فالسبب على الأرجح قبل التفرّع.', ' All lines are weak, so the cause is most likely before the branches.')),
+      causes: t === 'common' ? causesCommon() : t === 'local' ? causesLocal() : [...causesCommon(), ...causesLocal()],
+      action: t === 'common' ? tr('افحص الفلتر الرئيسي ثم المضخة. السبب يُؤكَّد بالفحص.', 'Check the main filter, then the pump. Only inspection confirms the cause.') : t === 'local' ? tr(`افحص صمام ${names(fp.low)} وأنبوبه ورشاشه. السبب يُؤكَّد بالفحص.`, `Check the valve, pipe and sprinkler of ${names(fp.low)}. Only inspection confirms the cause.`) : tr('افحص الفلتر ثم الصمام والرشاش. السبب يُؤكَّد بالفحص.', 'Check the filter, then the valve and sprinkler. Only inspection confirms the cause.')});
   }
-  if(st.lockout) out.push({key:'lock', pr:'high', who:'rule', title:'إيقاف المضخة: الماء لا يمر تقريبًا',
-    obs:'مجموع التدفق أقل من ٢٠٪ من المتوقع لأكثر من ٤ دقائق.', causes:['أنبوب أو فلتر مسدود','المضخة تسحب هواءً','عطل في الحساسات'], action:'افحص ثم أعد تشغيل المضخة من لوحة القواعد.'});
-  if(st.protect) out.push({key:'min', pr:'high', who:'rule', title:'تنبيه جفاف الخزان: حماية المضخة',
-    obs:`المستوى ${P(pct)} (${n0(st.tankL)} لتر). مُنعت المضخة الغاطسة من العمل بلا ماء.`, causes:['الري استهلك الماء ولم تحدث تعبئة'], action:`اطلب الصهريج. يعود الري وحده عند ${P(set.tankResume)}.`});
-  else if(pct < set.tankWarn && !st.filling) out.push({key:'warn', pr:'mid', who:'rule', title:'الخزان منخفض',
-    obs:`المستوى ${P(pct)} (${n0(st.tankL)} لتر من ${n0(CAP)}).`, causes:['استهلاك دون تعبئة'], action:'رتّب موعد الصهريج قريبًا.'});
-  if(st.filling && pct >= set.tankFull) out.push({key:'full', pr:'high', who:'rule', title:'صفارة الامتلاء لسائق الصهريج',
-    obs:`المستوى ${P(pct)} والتعبئة مستمرة. الصفارة العالية تعمل.`, causes:['السائق لم يُغلق المحبس بعد'], action:'يُغلق السائق محبس الصهريج. النظام ينبّه فقط ولا يتحكم في الصهريج.'});
+  if(st.lockout) out.push({key:'lock', pr:'high', who:'rule', title:tr('إيقاف المضخة: الماء لا يمر تقريبًا', 'Pump stopped: almost no water flowing'),
+    obs:tr('مجموع التدفق أقل من ٢٠٪ من المتوقع لأكثر من ٤ دقائق.', 'Total flow below 20% of expected for more than 4 minutes.'), causes:[tr('أنبوب أو فلتر مسدود', 'Blocked pipe or filter'), tr('المضخة تسحب هواءً', 'Pump drawing air'), tr('عطل في الحساسات', 'Sensor fault')], action:tr('افحص ثم أعد تشغيل المضخة.', 'Inspect, then restart the pump.')});
+  if(st.protect) out.push({key:'min', pr:'high', who:'rule', title:tr('تنبيه انخفاض مستوى المياه: حماية المضخة', 'Low water-level alert: pump protection'),
+    obs:tr(`المستوى ${P(pct)} (${n0(st.tankL)} لتر). مُنعت المضخة الغاطسة من العمل بلا ماء.`, `Level ${P(pct)} (${n0(st.tankL)} L). The submersible pump is blocked from running dry.`), causes:[tr('الري استهلك الماء ولم تحدث تعبئة', 'Irrigation used the water and the tank was not refilled')], action:tr(`اطلب الصهريج. يعود الري وحده عند ${P(set.tankResume)}.`, `Call the tanker. Irrigation resumes automatically at ${P(set.tankResume)}.`)});
+  else if(pct < set.tankWarn && !st.filling) out.push({key:'warn', pr:'mid', who:'rule', title:tr('الخزان منخفض', 'Tank is low'),
+    obs:tr(`المستوى ${P(pct)} (${n0(st.tankL)} لتر من ${n0(CAP)}).`, `Level ${P(pct)} (${n0(st.tankL)} of ${n0(CAP)} L).`), causes:[tr('استهلاك دون تعبئة', 'Consumption without refilling')], action:tr('رتّب موعد الصهريج قريبًا.', 'Schedule the tanker soon.')});
+  if(st.filling && pct >= set.tankFull) out.push({key:'full', pr:'high', who:'rule', title:tr('صفارة الامتلاء لسائق الصهريج', 'Full-tank siren for the tanker driver'),
+    obs:tr(`المستوى ${P(pct)} والتعبئة مستمرة. الصفارة تعمل.`, `Level ${P(pct)} and filling continues. The siren is sounding.`), causes:[tr('السائق لم يُغلق المحبس بعد', 'The driver has not closed the valve yet')], action:tr('يُغلق السائق محبس الصهريج. النظام ينبّه فقط ولا يتحكم في الصهريج.', 'The driver closes the tanker valve. The system only alerts; it does not control the tanker.')});
   const fast = st.zones.filter(z => z.obsRate / z.base > 1.5);
-  if(fast.length) out.push({key:'dry', pr:'low', who:'ai', title:'التربة تجف أسرع من المعتاد',
-    obs:`سرعة الجفاف أعلى بنحو ${n1(fast[0].obsRate / fast[0].base)} مرة من الأيام العادية.`,
-    causes:[`حرارة عالية (${n0(st.temp)}°م — رقم محاكاة، لا يوجد حساس حرارة)`,'رياح أو هواء جاف','اختلاف في التربة'], action:'راقب المناطق، وفكّر في الري صباحًا.'});
-  st.zones.forEach((z, i) => { if(z.want && !st.pump) out.push({key:'blk' + i, pr:'high', who:'rule', title:`${z.name} جافة والمضخة ممنوعة`,
-    obs:`مؤشر LED أحمر (${P(z.m)})، لكن قاعدة حماية تمنع المضخة.`, causes:[st.protect ? 'الخزان عند حد الحماية' : 'إيقاف بسبب انعدام التدفق'], action:'عالج سبب المنع، وسيبدأ الري وحده.'}); });
+  if(fast.length) out.push({key:'dry', pr:'low', who:'ai', title:tr('التربة تجف أسرع من المعتاد', 'Soil is drying faster than usual'),
+    obs:tr(`سرعة الجفاف أعلى بنحو ${n1(fast[0].obsRate / fast[0].base)} مرة من الأيام العادية.`, `Drying rate is about ${n1(fast[0].obsRate / fast[0].base)}× a normal day.`),
+    causes:[tr(`حرارة عالية (${n0(st.temp)}°م — رقم محاكاة، لا يوجد حساس حرارة)`, `High temperature (${n0(st.temp)}°C — simulated value, no temperature sensor)`), tr('رياح أو هواء جاف', 'Wind or dry air'), tr('اختلاف في التربة', 'Soil differences')], action:tr('راقب المناطق، وفكّر في الري صباحًا.', 'Monitor the zones and consider irrigating in the morning.')});
+  st.zones.forEach((z, i) => { if(z.want && !st.pump) out.push({key:'blk' + i, pr:'high', who:'rule', title:tr(`${zn(z)} جافة والمضخة ممنوعة`, `${zn(z)} is dry and the pump is blocked`),
+    obs:tr(`مؤشر LED أحمر (${P(z.m)})، لكن قاعدة حماية تمنع المضخة.`, `LED indicator is red (${P(z.m)}), but a protection rule blocks the pump.`), causes:[st.protect ? tr('الخزان عند حد الحماية', 'Tank at the protection limit') : tr('إيقاف بسبب انعدام التدفق', 'Stopped due to no flow')], action:tr('عالج سبب المنع، وسيبدأ الري وحده.', 'Fix the cause and irrigation will start automatically.')}); });
   return out;
 }
 function evaluate(st, set){
-  const conds = conditions(st, set), keys = new Set(conds.map(c => c.key));
+  const ca = withLang('ar', () => conditions(st, set)), ce = withLang('en', () => conditions(st, set));
+  const conds = ca.map((c, i) => ({...c, title:{ar:c.title, en:ce[i].title}, obs:{ar:c.obs, en:ce[i].obs}, causes:{ar:c.causes, en:ce[i].causes}, action:{ar:c.action, en:ce[i].action}}));
+  const keys = new Set(conds.map(c => c.key));
   const live = new Set(st.alerts.filter(a => a.active).map(a => a.key));
   let seq = st.seq;
   const alerts = st.alerts.map(a => ({...a, active:a.active && keys.has(a.key)}));
   conds.forEach(c => { if(!live.has(c.key)){ seq++; alerts.unshift({...c, id:seq, time:st.clock, status:'new', active:true}); } });
   return {...st, alerts, seq};
 }
-function commit(prev, next){
-  const L = [], flags = {...prev.flags};
-  if(!prev.pump && next.pump){ L.push(['rule', `شغّل النظام المضخة وفتح صمام ${names(next.zones.filter(z => z.valve))} لأن مؤشرها أحمر`]); flags.pumpOn = true; }
-  if(prev.pump && !next.pump) L.push(['rule', next.protect ? 'منع النظام المضخة: الخزان شبه فارغ' : next.lockout ? 'أوقف النظام المضخة: الماء لا يمر' : 'أوقف النظام المضخة: كل المناطق ارتوت']);
+function logMsgs(prev, next){
+  const M = [];
+  if(!prev.pump && next.pump) M.push(['rule', tr(`شغّل النظام المضخة وفتح صمام ${names(next.zones.filter(z => z.valve))} لأن مؤشرها أحمر`, `System started the pump and opened the ${names(next.zones.filter(z => z.valve))} valve because its indicator turned red`)]);
+  if(prev.pump && !next.pump) M.push(['rule', next.protect ? tr('منع النظام المضخة: الخزان شبه فارغ', 'System blocked the pump: tank almost empty') : next.lockout ? tr('أوقف النظام المضخة: الماء لا يمر', 'System stopped the pump: no water flowing') : tr('أوقف النظام المضخة: كل المناطق ارتوت', 'System stopped the pump: all zones are watered')]);
   next.zones.forEach((z, i) => { const p = prev.zones[i];
-    if(!p.valve && z.valve && prev.pump) L.push(['rule', `فُتح صمام ${z.name}`]);
-    if(p.valve && !z.valve && next.pump) L.push(['rule', `أُغلق صمام ${z.name} عند ${P(z.m)}`]);
-    if(ledOf(p.m) !== ledOf(z.m)) L.push(['rule', `تغيّر مؤشر ${z.name} إلى ${LED_TXT[ledOf(z.m)]}`]); });
-  if(!prev.siren && next.siren) L.push(['rule', 'انطلقت صفارة الامتلاء لسائق الصهريج']);
-  if(prev.siren && !next.siren) L.push(['rule', 'توقفت صفارة الامتلاء']);
-  if(!prev.buzzer && next.buzzer) L.push(['rule', 'انطلق تنبيه جفاف الخزان']);
-  if(prev.buzzer && !next.buzzer) L.push(['rule', 'توقف تنبيه الجفاف']);
-  next.alerts.filter(a => a.id > prev.seq).forEach(a => { if(a.who === 'ai') L.push(['ai', `نبّه: ${a.title}`]); else if(a.key.startsWith('flow')) L.push(['rule', `حساسات التدفق: ${a.title}`]); });
+    if(!p.valve && z.valve && prev.pump) M.push(['rule', tr(`فُتح صمام ${zn(z)}`, `${zn(z)} valve opened`)]);
+    if(p.valve && !z.valve && next.pump) M.push(['rule', tr(`أُغلق صمام ${zn(z)} عند ${P(z.m)}`, `${zn(z)} valve closed at ${P(z.m)}`)]);
+    if(ledOf(p.m) !== ledOf(z.m)) M.push(['rule', tr(`تغيّر مؤشر ${zn(z)} إلى ${ledTxt(ledOf(z.m))}`, `${zn(z)} indicator changed to ${ledTxt(ledOf(z.m))}`)]); });
+  if(!prev.siren && next.siren) M.push(['rule', tr('انطلقت صفارة الامتلاء لسائق الصهريج', 'Full-tank siren sounded for the tanker driver')]);
+  if(prev.siren && !next.siren) M.push(['rule', tr('توقفت صفارة الامتلاء', 'Full-tank siren stopped')]);
+  if(!prev.buzzer && next.buzzer) M.push(['rule', tr('انطلق تنبيه انخفاض مستوى المياه', 'Low water-level alert started')]);
+  if(prev.buzzer && !next.buzzer) M.push(['rule', tr('توقف تنبيه انخفاض مستوى المياه', 'Low water-level alert stopped')]);
+  next.alerts.filter(a => a.id > prev.seq).forEach(a => { if(a.who === 'ai') M.push(['ai', tr('نبّه: ', 'Alert: ') + L(a.title)]); else if(a.key.startsWith('flow')) M.push(['rule', tr('حساسات التدفق: ', 'Flow sensors: ') + L(a.title)]); });
+  return M;
+}
+function commit(prev, next){
+  const flags = {...prev.flags};
+  if(!prev.pump && next.pump) flags.pumpOn = true;
+  const ma = withLang('ar', () => logMsgs(prev, next)), me = withLang('en', () => logMsgs(prev, next));
   if(next.protect) flags.protect = true;
-  if(next.alerts.some(a => a.active && a.key.startsWith('flow-local'))) flags.local = true;
   if(next.siren) flags.full = true;
-  if(prev.filling && !next.filling && flags.full) flags.stopFill = true;
-  if(next.alerts.some(a => a.active && a.key === 'dry')) flags.hot = true;
-  const items = L.map(([w, m], k) => ({w, m, t:next.clock, id:prev.logSeq + k + 1})).reverse();
-  return {...next, flags, log:[...items, ...prev.log].slice(0, 10), logSeq:prev.logSeq + L.length};
+  const items = ma.map(([w, m], k) => ({w, m:{ar:m, en:me[k][1]}, t:next.clock, id:prev.logSeq + k + 1})).reverse();
+  return {...next, flags, log:[...items, ...prev.log].slice(0, 10), logSeq:prev.logSeq + ma.length};
 }
 const tick = (st, min, set) => commit(st, evaluate(control(physics(st, min), set), set));
 
@@ -848,108 +870,110 @@ function predictions(st, set){
   const blocked = f.find(o => o.type === 'now' && !o.z.valve);
   const wet = f.find(o => o.type === 'wet');
   const dry = f.filter(o => o.type === 'dry').sort((a, b) => a.h - b.h)[0];
-  if(blocked) out.push({tone:'crit', title:`${blocked.z.name} تحتاج ماءً الآن`, text:'لكن قاعدة الحماية في النظام المنفَّذ تمنع المضخة، وطبقة الذكاء الاصطناعي لا تستطيع تجاوزها.',
-    why:[['الرطوبة الآن', P(blocked.z.m), 'حساس'], ['يبدأ الري عند', P(set.start[blocked.i]), 'إعداد']]});
-  else if(dry) out.push({tone:dry.h < 4 ? 'warn' : 'info', title:`يُتوقّع أن تحتاج ${dry.z.name} إلى الري خلال ${dur(dry.h)}`, text:'هي الأقرب إلى الجفاف بين المناطق غير المروية.',
-    why:[['الرطوبة الآن', P(dry.z.m), 'حساس'], ['يبدأ الري عند', P(set.start[dry.i]), 'إعداد'], ['سرعة الجفاف', `${n1(dry.z.obsRate)}٪ في الساعة`, 'محسوبة من سجل القراءات'], ['الحرارة', `${n0(st.temp)}°م`, 'رقم محاكاة']],
-    how:'المدة = (الرطوبة الآن − حد البدء) ÷ سرعة الجفاف'});
-  else if(wet) out.push({tone:'info', title:`${wet.z.name} تُروى الآن`, text:`تصل إلى حد التوقف خلال ${dur(wet.h)} إذا بقي التدفق كما هو.`,
-    why:[['الرطوبة الآن', P(wet.z.m), 'حساس'], ['يتوقف الري عند', P(set.stop[wet.i]), 'إعداد']], how:'المدة = (حد التوقف − الرطوبة الآن) ÷ سرعة الابتلال'});
-  const usable = st.tankL - set.tankMin * CAP / 100;
+  const S = tr('حساس', 'sensor'), ST = tr('إعداد', 'setting'), SIM = tr('رقم محاكاة', 'simulated');
+  if(blocked) out.push({tone:'crit', title:tr(`${zn(blocked.z)} تحتاج ماءً الآن`, `${zn(blocked.z)} needs water now`), text:tr('لكن قاعدة الحماية في النظام المنفَّذ تمنع المضخة، وطبقة الذكاء الاصطناعي لا تستطيع تجاوزها.', 'But the implemented system\'s protection rule blocks the pump, and the AI layer cannot override it.'),
+    why:[[tr('الرطوبة الآن', 'Moisture now'), P(blocked.z.m), S], [tr('يبدأ الري عند', 'Irrigation starts at'), P(set.start[blocked.i]), ST]]});
+  else if(dry) out.push({tone:dry.h < 4 ? 'warn' : 'info', title:tr(`يُتوقّع أن تحتاج ${zn(dry.z)} إلى الري خلال ${dur(dry.h)}`, `${zn(dry.z)} is expected to need irrigation in ${dur(dry.h)}`), text:tr('هي الأقرب إلى الجفاف بين المناطق غير المروية.', 'It is the closest to dry among the zones not being irrigated.'),
+    why:[[tr('الرطوبة الآن', 'Moisture now'), P(dry.z.m), S], [tr('يبدأ الري عند', 'Irrigation starts at'), P(set.start[dry.i]), ST], [tr('سرعة الجفاف', 'Drying rate'), tr(`${n1(dry.z.obsRate)}٪ في الساعة`, `${n1(dry.z.obsRate)}% per hour`), tr('محسوبة من سجل القراءات', 'computed from reading history')], [tr('الحرارة', 'Temperature'), `${n0(st.temp)}°${tr('م', 'C')}`, SIM]],
+    how:tr('المدة = (الرطوبة الآن − حد البدء) ÷ سرعة الجفاف', 'Time = (moisture now − start threshold) ÷ drying rate')});
+  else if(wet) out.push({tone:'info', title:tr(`${zn(wet.z)} تُروى الآن`, `${zn(wet.z)} is being irrigated`), text:tr(`تصل إلى حد التوقف خلال ${dur(wet.h)} إذا بقي التدفق كما هو.`, `It reaches the stop threshold in ${dur(wet.h)} if flow stays the same.`),
+    why:[[tr('الرطوبة الآن', 'Moisture now'), P(wet.z.m), S], [tr('يتوقف الري عند', 'Irrigation stops at'), P(set.stop[wet.i]), ST]], how:tr('المدة = (حد التوقف − الرطوبة الآن) ÷ سرعة الابتلال', 'Time = (stop threshold − moisture now) ÷ wetting rate')});
+  const usable = st.tankL - set.tankMin * CAP / 100, DS = tr('حساس المسافة', 'distance sensor');
   if(st.filling){
     const net = st.inflow - st.flow, h = (set.tankFull - pct) * CAP / 100 / Math.max(net, .1) / 60;
-    out.push({tone:pct >= set.tankFull ? 'crit' : 'warn', title:pct >= set.tankFull ? 'الخزان عند حد الامتلاء' : `ستنطلق صفارة الامتلاء خلال ${dur(h)}`,
-      text:'يمكن إرسال هذا التقدير لسائق الصهريج مسبقًا عبر وحدة الاتصال المقترحة.',
-      why:[['المستوى الآن', `${P(pct)} (${n0(st.tankL)} لتر)`, 'حساس المسافة'], ['سرعة الارتفاع', `${n1(net)} لتر/دقيقة`, 'محسوبة'], ['حد الصفارة', P(set.tankFull), 'إعداد']]});
+    out.push({tone:pct >= set.tankFull ? 'crit' : 'warn', title:pct >= set.tankFull ? tr('الخزان عند حد الامتلاء', 'Tank at the full limit') : tr(`ستنطلق صفارة الامتلاء خلال ${dur(h)}`, `The full-tank siren will sound in ${dur(h)}`),
+      text:tr('يمكن إرسال هذا التقدير لسائق الصهريج مسبقًا عبر وحدة الاتصال المقترحة.', 'This estimate could be sent to the tanker driver in advance through the proposed communication module.'),
+      why:[[tr('المستوى الآن', 'Level now'), `${P(pct)} (${n0(st.tankL)} ${tr('لتر', 'L')})`, DS], [tr('سرعة الارتفاع', 'Rise rate'), `${n1(net)} ${LPM()}`, tr('محسوبة', 'computed')], [tr('حد الصفارة', 'Siren limit'), P(set.tankFull), ST]]});
   } else if(st.protect || usable <= 0){
-    out.push({tone:'crit', title:'لا يوجد ماء كافٍ للري', text:'الخزان عند حد الحماية.', why:[['المستوى الآن', `${P(pct)} (${n0(st.tankL)} لتر)`, 'حساس المسافة']]});
+    out.push({tone:'crit', title:tr('لا يوجد ماء كافٍ للري', 'Not enough water to irrigate'), text:tr('الخزان عند حد الحماية.', 'The tank is at the protection limit.'), why:[[tr('المستوى الآن', 'Level now'), `${P(pct)} (${n0(st.tankL)} ${tr('لتر', 'L')})`, DS]]});
   } else {
     const h = usable / st.avgDaily * 24;
-    out.push({tone:h < 12 ? 'crit' : h < 30 ? 'warn' : 'ok', title:`ماء الخزان يكفي ${dur(h)}`, text:h < 30 ? 'يُنصح بطلب الصهريج قريبًا.' : 'لا حاجة إلى الصهريج الآن.',
-      why:[['الماء الآن', `${n0(st.tankL)} لتر (${P(pct)})`, 'حساس المسافة'], ['المتاح فوق حد الحماية', `${n0(usable)} لتر`, 'محسوب'], ['الاستهلاك اليومي المعتاد', `${n0(st.avgDaily)} لتر`, 'سجل محاكاة']],
-      how:'المدة = الماء المتاح ÷ الاستهلاك اليومي'});
+    out.push({tone:h < 12 ? 'crit' : h < 30 ? 'warn' : 'ok', title:tr(`ماء الخزان يكفي ${dur(h)}`, `Tank water lasts ${dur(h)}`), text:h < 30 ? tr('يُنصح بطلب الصهريج قريبًا.', 'Calling the tanker soon is advised.') : tr('لا حاجة إلى الصهريج الآن.', 'No need for the tanker now.'),
+      why:[[tr('الماء الآن', 'Water now'), `${n0(st.tankL)} ${tr('لتر', 'L')} (${P(pct)})`, DS], [tr('المتاح فوق حد الحماية', 'Usable above protection limit'), `${n0(usable)} ${tr('لتر', 'L')}`, tr('محسوب', 'computed')], [tr('الاستهلاك اليومي المعتاد', 'Usual daily use'), `${n0(st.avgDaily)} ${tr('لتر', 'L')}`, tr('سجل محاكاة', 'simulated log')]],
+      how:tr('المدة = الماء المتاح ÷ الاستهلاك اليومي', 'Time = usable water ÷ daily use')});
   }
   const fp = flowPattern(st), hotZ = st.zones.find(z => z.obsRate / z.base > 1.5);
-  if(fp && fp.type !== 'ok') out.push({tone:'warn', title: fp.type === 'local' ? `ابدأ الفحص من خط ${names(fp.low)}` : fp.type === 'common' ? 'ابدأ الفحص من الفلتر الرئيسي' : 'ابدأ بالفلتر ثم الصمام',
-    text:'ترتّب الطبقة الأسباب المحتملة لتسريع الفحص، ولا تؤكد سببًا بعينه.',
-    why:fp.open.map(z => [`تدفق ${z.name}`, `${n1(z.flow)} من ${n1(z.expected)} ل/د`, 'حساس تدفق']), how:'المقارنة بين الخطوط تميّز المشكلة المشتركة من مشكلة خط واحد.'});
-  else if(hotZ) out.push({tone:'warn', title:'التربة تجف بسرعة اليوم', text:'قد يتكرر الري ويزيد الاستهلاك.',
-    why:[['سرعة الجفاف اليوم', `${n1(hotZ.obsRate)}٪ في الساعة`, 'محسوبة'], ['في الأيام العادية', `${n1(hotZ.base)}٪ في الساعة`, 'سجل محاكاة'], ['الحرارة', `${n0(st.temp)}°م`, 'رقم محاكاة']]});
+  if(fp && fp.type !== 'ok') out.push({tone:'warn', title: fp.type === 'local' ? tr(`ابدأ الفحص من خط ${names(fp.low)}`, `Start inspection at the ${names(fp.low)} line`) : fp.type === 'common' ? tr('ابدأ الفحص من الفلتر الرئيسي', 'Start inspection at the main filter') : tr('ابدأ بالفلتر ثم الصمام', 'Start with the filter, then the valve'),
+    text:tr('ترتّب الطبقة الأسباب المحتملة لتسريع الفحص، ولا تؤكد سببًا بعينه.', 'The layer ranks possible causes to speed up inspection; it does not confirm any single cause.'),
+    why:fp.open.map(z => [tr(`تدفق ${zn(z)}`, `${zn(z)} flow`), `${n1(z.flow)} ${tr('من', 'of')} ${n1(z.expected)} ${LPM()}`, tr('حساس تدفق', 'flow sensor')]), how:tr('المقارنة بين الخطوط تميّز المشكلة المشتركة من مشكلة خط واحد.', 'Comparing lines separates a shared problem from a single-line problem.')});
+  else if(hotZ) out.push({tone:'warn', title:tr('التربة تجف بسرعة اليوم', 'Soil is drying fast today'), text:tr('قد يتكرر الري ويزيد الاستهلاك.', 'Irrigation may repeat more often and use more water.'),
+    why:[[tr('سرعة الجفاف اليوم', 'Drying rate today'), tr(`${n1(hotZ.obsRate)}٪ في الساعة`, `${n1(hotZ.obsRate)}% per hour`), tr('محسوبة', 'computed')], [tr('في الأيام العادية', 'On normal days'), tr(`${n1(hotZ.base)}٪ في الساعة`, `${n1(hotZ.base)}% per hour`), tr('سجل محاكاة', 'simulated log')], [tr('الحرارة', 'Temperature'), `${n0(st.temp)}°${tr('م', 'C')}`, SIM]]});
   return out;
 }
 function headline(st, set){
   const pct = tankPct(st), fp = flowPattern(st);
-  if(st.siren) return ['crit', 'صفارة الامتلاء تعمل!', `الخزان ${P(pct)} والصهريج ما زال يعبّئ. يجب أن يُغلق السائق المحبس؛ النظام لا يتحكم في الصهريج.`];
-  if(st.protect) return ['crit', 'حماية المضخة تعمل', `الخزان ${P(pct)} فقط. تنبيه الجفاف يعمل، والمضخة الغاطسة ممنوعة حتى التعبئة.`];
-  if(st.lockout) return ['crit', 'المضخة متوقفة: الماء لا يمر', 'افحص الأنابيب والفلتر قبل إعادة التشغيل.'];
-  if(fp && fp.type === 'local') return ['warn', `تدفق ضعيف في خط ${names(fp.low)} فقط`, 'بقية الخطوط طبيعية، فالمشكلة على الأرجح في هذا الخط: الصمام أو الأنبوب أو الرشاش.'];
-  if(fp && fp.type !== 'ok') return ['warn', 'تدفق ضعيف', fp.type === 'common' ? 'الضعف في كل الخطوط، فالسبب على الأرجح في الفلتر أو المضخة.' : 'خط واحد مفتوح فقط؛ افحص الفلتر ثم الصمام.'];
-  if(st.filling) return ['warn', 'الصهريج يعبّئ الخزان', `المستوى ${P(pct)}. ستنطلق الصفارة عند ${P(set.tankFull)}.`];
-  if(pct < set.tankWarn) return ['warn', 'الخزان ينخفض', `بقي ${n0(st.tankL)} لتر (${P(pct)}). تعمل حماية المضخة عند ${P(set.tankMin)}.`];
-  if(st.pump) return ['ok', 'الري يعمل', `المضخة تسقي ${names(st.zones.filter(z => z.valve))} لأن مؤشرها صار أحمر.`];
-  return ['ok', 'كل شيء طبيعي', 'مؤشرات الرطوبة خضراء، والخزان في مستوى جيد.'];
+  if(st.siren) return ['crit', tr('صفارة الامتلاء تعمل!', 'Full-tank siren is sounding!'), tr(`الخزان ${P(pct)} والصهريج ما زال يعبّئ. يجب أن يُغلق السائق المحبس؛ النظام لا يتحكم في الصهريج.`, `Tank at ${P(pct)} and the tanker is still filling. The driver must close the valve; the system does not control the tanker.`)];
+  if(st.protect) return ['crit', tr('حماية المضخة تعمل', 'Pump protection is active'), tr(`الخزان ${P(pct)} فقط. تنبيه انخفاض مستوى المياه يعمل، والمضخة الغاطسة ممنوعة حتى التعبئة.`, `Tank at only ${P(pct)}. The low water-level alert is on, and the submersible pump is blocked until refilling.`)];
+  if(st.lockout) return ['crit', tr('المضخة متوقفة: الماء لا يمر', 'Pump stopped: no water flowing'), tr('افحص الأنابيب والفلتر قبل إعادة التشغيل.', 'Inspect the pipes and filter before restarting.')];
+  if(fp && fp.type === 'local') return ['warn', tr(`تدفق ضعيف في خط ${names(fp.low)} فقط`, `Low flow in the ${names(fp.low)} line only`), tr('بقية الخطوط طبيعية، فالمشكلة على الأرجح في هذا الخط: الصمام أو الأنبوب أو الرشاش.', 'The other lines are normal, so the problem is most likely in this line: the valve, pipe or sprinkler.')];
+  if(fp && fp.type !== 'ok') return ['warn', tr('تدفق ضعيف', 'Low flow'), fp.type === 'common' ? tr('الضعف في كل الخطوط، فالسبب على الأرجح في الفلتر أو المضخة.', 'All lines are weak, so the cause is most likely the filter or the pump.') : tr('خط واحد مفتوح فقط؛ افحص الفلتر ثم الصمام.', 'Only one line is open; check the filter, then the valve.')];
+  if(st.filling) return ['warn', tr('الصهريج يعبّئ الخزان', 'The tanker is filling the tank'), tr(`المستوى ${P(pct)}. ستنطلق الصفارة عند ${P(set.tankFull)}.`, `Level ${P(pct)}. The siren will sound at ${P(set.tankFull)}.`)];
+  if(pct < set.tankWarn) return ['warn', tr('الخزان ينخفض', 'Tank level is dropping'), tr(`بقي ${n0(st.tankL)} لتر (${P(pct)}). تعمل حماية المضخة عند ${P(set.tankMin)}.`, `${n0(st.tankL)} L left (${P(pct)}). Pump protection activates at ${P(set.tankMin)}.`)];
+  if(st.pump) return ['ok', tr('الري يعمل', 'Irrigation is running'), tr(`المضخة تسقي ${names(st.zones.filter(z => z.valve))} لأن مؤشرها صار أحمر.`, `The pump is watering ${names(st.zones.filter(z => z.valve))} because its indicator turned red.`)];
+  return ['ok', tr('كل شيء طبيعي', 'Everything is normal'), tr('مؤشرات الرطوبة خضراء، والخزان في مستوى جيد.', 'Moisture indicators are green and the tank level is good.')];
 }
 
-/* ================= المساعد (ردود محلية) ================= */
 /* ===== ربط المساعد بخادم وسيط (Cloudflare Worker) يحفظ مفتاح Claude API =====
    ضعي رابط الخادم هنا بعد إنشائه. إن بقي فارغًا أو تعذّر الاتصال، يستخدم المساعد الردود المبرمجة. */
 const AI_ENDPOINT = '';
 function stateSummary(st, set){
-  const pct = tankPct(st), L = [];
-  L.push(`الوقت: ${clockStr(st.clock)}`);
-  L.push(`الخزان الأرضي: ${P(pct)} (${n0(st.tankL)} لتر من ${n0(CAP)}). حد الحماية ${P(set.tankMin)}، حد صفارة الامتلاء ${P(set.tankFull)}.`);
-  L.push(`المضخة الغاطسة: ${st.pump ? 'تعمل' : 'متوقفة'}${st.protect ? ' (ممنوعة بقاعدة حماية الخزان)' : ''}${st.lockout ? ' (موقوفة لانعدام التدفق)' : ''}.`);
-  st.zones.forEach((z, i) => L.push(`${z.name}: رطوبة ${P(z.m)}، مؤشر ${LED_TXT[ledOf(z.m)]}، الصمام ${z.valve ? 'مفتوح' : 'مغلق'}، التدفق ${n1(z.flow)} من ${n1(z.expected)} لتر/دقيقة متوقعة، سرعة الجفاف ${n1(z.obsRate)}٪/ساعة، حد التوقف ${P(set.stop[i])}.`));
-  L.push(`الصهريج: ${st.filling ? 'يعبّئ الآن' : 'لا يعبّئ'}. صفارة الامتلاء: ${st.siren ? 'تعمل' : 'صامتة'}. تنبيه الجفاف: ${st.buzzer ? 'يعمل' : 'صامت'}.`);
-  L.push(`درجة الحرارة: ${n0(st.temp)}°م (رقم محاكاة، لا يوجد حساس حرارة). الاستهلاك المعتاد ${n0(st.avgDaily)} لتر يوميًا، واستهلاك اليوم ${n0(st.consumed)} لتر.`);
-  const act = st.alerts.filter(a => a.active).map(a => a.title);
-  L.push(`التنبيهات النشطة: ${act.length ? act.join('، ') : 'لا يوجد'}.`);
-  return L.join('\n');
+  const pct = tankPct(st), S = [];
+  S.push(`${tr('الوقت', 'Time')}: ${clockStr(st.clock)}`);
+  S.push(tr(`الخزان الأرضي: ${P(pct)} (${n0(st.tankL)} لتر من ${n0(CAP)}). حد الحماية ${P(set.tankMin)}، حد صفارة الامتلاء ${P(set.tankFull)}.`, `Ground tank: ${P(pct)} (${n0(st.tankL)} of ${n0(CAP)} L). Protection limit ${P(set.tankMin)}, full-tank siren limit ${P(set.tankFull)}.`));
+  S.push(tr(`المضخة الغاطسة: ${st.pump ? 'تعمل' : 'متوقفة'}${st.protect ? ' (ممنوعة بقاعدة حماية الخزان)' : ''}${st.lockout ? ' (موقوفة لانعدام التدفق)' : ''}.`, `Submersible pump: ${st.pump ? 'running' : 'stopped'}${st.protect ? ' (blocked by tank protection rule)' : ''}${st.lockout ? ' (stopped due to no flow)' : ''}.`));
+  st.zones.forEach((z, i) => S.push(tr(`${zn(z)}: رطوبة ${P(z.m)}، مؤشر ${ledTxt(ledOf(z.m))}، الصمام ${z.valve ? 'مفتوح' : 'مغلق'}، التدفق ${n1(z.flow)} من ${n1(z.expected)} لتر/دقيقة متوقعة، سرعة الجفاف ${n1(z.obsRate)}٪/ساعة، حد التوقف ${P(set.stop[i])}.`,
+    `${zn(z)}: moisture ${P(z.m)}, indicator ${ledTxt(ledOf(z.m))}, valve ${z.valve ? 'open' : 'closed'}, flow ${n1(z.flow)} of ${n1(z.expected)} L/min expected, drying rate ${n1(z.obsRate)}%/h, stop threshold ${P(set.stop[i])}.`)));
+  S.push(tr(`الصهريج: ${st.filling ? 'يعبّئ الآن' : 'لا يعبّئ'}. صفارة الامتلاء: ${st.siren ? 'تعمل' : 'صامتة'}. تنبيه انخفاض مستوى المياه: ${st.buzzer ? 'يعمل' : 'لا يوجد'}.`, `Tanker: ${st.filling ? 'filling now' : 'not filling'}. Full-tank siren: ${st.siren ? 'on' : 'off'}. Low water-level alert: ${st.buzzer ? 'on' : 'off'}.`));
+  S.push(tr(`درجة الحرارة: ${n0(st.temp)}°م (رقم محاكاة، لا يوجد حساس حرارة). الاستهلاك المعتاد ${n0(st.avgDaily)} لتر يوميًا، واستهلاك اليوم ${n0(st.consumed)} لتر.`, `Temperature: ${n0(st.temp)}°C (simulated, no temperature sensor). Usual use ${n0(st.avgDaily)} L/day; today ${n0(st.consumed)} L.`));
+  const act = st.alerts.filter(a => a.active).map(a => L(a.title));
+  S.push(`${tr('التنبيهات النشطة', 'Active alerts')}: ${act.length ? act.join(tr('، ', '; ')) : tr('لا يوجد', 'none')}.`);
+  return S.join('\n');
 }
 async function askAI(question, st, set){
   const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 20000);
   try{
-    const r = await fetch(AI_ENDPOINT, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({question, state:stateSummary(st, set)}), signal:ctl.signal});
+    const r = await fetch(AI_ENDPOINT, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({question, state:stateSummary(st, set), lang:LANG}), signal:ctl.signal});
     if(!r.ok) throw new Error('http ' + r.status);
     const d = await r.json(); if(!d.text) throw new Error('empty');
     return d.text;
   } finally { clearTimeout(t); }
 }
 
-const QUESTIONS = [{id:'stop', q:'لماذا توقّف الري؟'}, {id:'tank', q:'هل الخزان يحتاج إلى تعبئة؟'}, {id:'zone', q:'ما المنطقة التي تحتاج إلى متابعة؟'}, {id:'flow', q:'لماذا انخفض تدفق المياه؟'}];
+const QUESTIONS = [{id:'stop', q:['لماذا توقّف الري؟', 'Why did irrigation stop?']}, {id:'tank', q:['هل الخزان يحتاج إلى تعبئة؟', 'Does the tank need refilling?']}, {id:'zone', q:['ما المنطقة التي تحتاج إلى متابعة؟', 'Which zone needs attention?']}, {id:'flow', q:['لماذا انخفض تدفق المياه؟', 'Why did the water flow drop?']}];
 function answer(id, st, set){
   const pct = tankPct(st), fp = flowPattern(st);
   const f = st.zones.map((z, i) => ({z, i, ...forecast(z, i, st, set)}));
   const waiting = f.filter(o => o.type === 'now' && !o.z.valve);
   const dry = f.filter(o => o.type === 'dry').sort((a, b) => a.h - b.h)[0];
   if(id === 'stop'){
-    if(st.pump) return `الري لم يتوقف. المضخة تسقي ${names(st.zones.filter(z => z.valve))} الآن، وسيُغلق الصمام وحده عند ${P(set.stop[0])}.`;
-    if(st.protect) return `توقّف لأن الخزان وصل إلى ${P(pct)}. قاعدة حماية في النظام تمنع المضخة الغاطسة من العمل بلا ماء. ${waiting.length ? names(waiting.map(o => o.z)) + ' تنتظر. ' : ''}بعد التعبئة إلى ${P(set.tankResume)} يعود الري وحده.`;
-    if(st.lockout) return 'أوقف النظام المضخة لأن الماء لم يكن يمر تقريبًا. افحص الأنابيب ثم أعد تشغيلها.';
-    return `لأن مؤشرات LED كلها خضراء، أي أن التربة رطبة بما يكفي. ${dry ? `أقرب منطقة للجفاف هي ${dry.z.name}، وقد تحتاج إلى الري خلال ${dur(dry.h)}.` : ''}`;
+    if(st.pump) return tr(`الري لم يتوقف. المضخة تسقي ${names(st.zones.filter(z => z.valve))} الآن، وسيُغلق الصمام وحده عند ${P(set.stop[0])}.`, `Irrigation has not stopped. The pump is watering ${names(st.zones.filter(z => z.valve))} now, and the valve will close by itself at ${P(set.stop[0])}.`);
+    if(st.protect) return tr(`توقّف لأن الخزان وصل إلى ${P(pct)}. قاعدة حماية في النظام تمنع المضخة الغاطسة من العمل بلا ماء. ${waiting.length ? names(waiting.map(o => o.z)) + ' تنتظر. ' : ''}بعد التعبئة إلى ${P(set.tankResume)} يعود الري وحده.`,
+      `It stopped because the tank reached ${P(pct)}. A protection rule prevents the submersible pump from running dry. ${waiting.length ? names(waiting.map(o => o.z)) + ' is waiting. ' : ''}After refilling to ${P(set.tankResume)}, irrigation resumes automatically.`);
+    if(st.lockout) return tr('أوقف النظام المضخة لأن الماء لم يكن يمر تقريبًا. افحص الأنابيب ثم أعد تشغيلها.', 'The system stopped the pump because almost no water was flowing. Inspect the pipes, then restart it.');
+    return tr(`لأن مؤشرات LED كلها خضراء، أي أن التربة رطبة بما يكفي. ${dry ? `أقرب منطقة للجفاف هي ${zn(dry.z)}، وقد تحتاج إلى الري خلال ${dur(dry.h)}.` : ''}`, `Because all LED indicators are green, meaning the soil is moist enough. ${dry ? `The zone closest to dry is ${zn(dry.z)}; it may need irrigation in ${dur(dry.h)}.` : ''}`);
   }
   if(id === 'tank'){
-    if(st.siren) return `لا، بل العكس! الخزان ${P(pct)} والصفارة تعمل. يجب أن يُغلق سائق الصهريج المحبس الآن.`;
-    if(st.filling) return `الصهريج يعبّئ الآن والمستوى ${P(pct)}. ستنطلق الصفارة عند ${P(set.tankFull)}.`;
-    if(st.protect) return `نعم، فورًا. الخزان ${P(pct)} والري متوقف حتى التعبئة.`;
+    if(st.siren) return tr(`لا، بل العكس! الخزان ${P(pct)} والصفارة تعمل. يجب أن يُغلق سائق الصهريج المحبس الآن.`, `No, the opposite! The tank is at ${P(pct)} and the siren is sounding. The tanker driver must close the valve now.`);
+    if(st.filling) return tr(`الصهريج يعبّئ الآن والمستوى ${P(pct)}. ستنطلق الصفارة عند ${P(set.tankFull)}.`, `The tanker is filling now and the level is ${P(pct)}. The siren will sound at ${P(set.tankFull)}.`);
+    if(st.protect) return tr(`نعم، فورًا. الخزان ${P(pct)} والري متوقف حتى التعبئة.`, `Yes, right away. The tank is at ${P(pct)} and irrigation is paused until refilling.`);
     const h = (st.tankL - set.tankMin * CAP / 100) / st.avgDaily * 24;
-    if(pct < set.tankWarn) return `نعم، قريبًا. بقي ${n0(st.tankL)} لتر، ويكفي ${dur(h)} تقريبًا.`;
-    return `ليس الآن. في الخزان ${n0(st.tankL)} لتر، ويكفي ${dur(h)} إذا بقي الاستهلاك كالمعتاد.`;
+    if(pct < set.tankWarn) return tr(`نعم، قريبًا. بقي ${n0(st.tankL)} لتر، ويكفي ${dur(h)} تقريبًا.`, `Yes, soon. ${n0(st.tankL)} L remain, enough for ${dur(h)}.`);
+    return tr(`ليس الآن. في الخزان ${n0(st.tankL)} لتر، ويكفي ${dur(h)} إذا بقي الاستهلاك كالمعتاد.`, `Not now. The tank holds ${n0(st.tankL)} L, enough for ${dur(h)} at usual consumption.`);
   }
   if(id === 'zone'){
-    if(waiting.length) return `${names(waiting.map(o => o.z))}: مؤشرها أحمر والمضخة ممنوعة. هذه أهم منطقة الآن.`;
+    if(waiting.length) return tr(`${names(waiting.map(o => o.z))}: مؤشرها أحمر والمضخة ممنوعة. هذه أهم منطقة الآن.`, `${names(waiting.map(o => o.z))}: the indicator is red and the pump is blocked. This is the most important zone now.`);
     let s = '';
     const wetZ = st.zones.filter(z => z.valve);
-    if(wetZ.length) s += `${names(wetZ)} تُروى الآن. `;
-    if(fp && fp.type === 'local') s += `تابع خط ${names(fp.low)} لأن الماء يصله أضعف من غيره. `;
-    if(dry) s += `بعدها ${dry.z.name}: رطوبتها ${P(dry.z.m)} وقد تحتاج إلى الري خلال ${dur(dry.h)}.`;
-    return s || 'كل المناطق بخير.';
+    if(wetZ.length) s += tr(`${names(wetZ)} تُروى الآن. `, `${names(wetZ)} is being irrigated now. `);
+    if(fp && fp.type === 'local') s += tr(`تابع خط ${names(fp.low)} لأن الماء يصله أضعف من غيره. `, `Watch the ${names(fp.low)} line; it receives weaker flow than the others. `);
+    if(dry) s += tr(`بعدها ${zn(dry.z)}: رطوبتها ${P(dry.z.m)} وقد تحتاج إلى الري خلال ${dur(dry.h)}.`, `Next is ${zn(dry.z)}: moisture ${P(dry.z.m)}, it may need irrigation in ${dur(dry.h)}.`);
+    return s || tr('كل المناطق بخير.', 'All zones are fine.');
   }
-  if(!fp) return 'لا يوجد تدفق لأن المضخة متوقفة، وهذا طبيعي.';
-  if(fp.type === 'ok') return 'لم ينخفض. كل الخطوط المفتوحة قريبة من التدفق المتوقع.';
-  if(fp.type === 'local') return `حساس خط ${names(fp.low)} يقرأ أقل من المتوقع، والخطوط الأخرى طبيعية. هذا يرجّح أن المشكلة في هذا الخط: صمامه أو أنبوبه أو رشاشه. السبب الدقيق يُعرف بالفحص.`;
-  if(fp.type === 'common') return 'كل الخطوط المفتوحة ضعيفة معًا، فالسبب على الأرجح قبل التفرّع: الفلتر الرئيسي أو المضخة. ابدأ بالفلتر.';
-  return 'خط واحد مفتوح فقط، فلا يمكن المقارنة. الاحتمالات: الفلتر، أو الصمام، أو الرشاش، أو الأنبوب. ابدأ بالفلتر.';
+  if(!fp) return tr('لا يوجد تدفق لأن المضخة متوقفة، وهذا طبيعي.', 'There is no flow because the pump is off, which is normal.');
+  if(fp.type === 'ok') return tr('لم ينخفض. كل الخطوط المفتوحة قريبة من التدفق المتوقع.', 'It has not dropped. All open lines are close to the expected flow.');
+  if(fp.type === 'local') return tr(`حساس خط ${names(fp.low)} يقرأ أقل من المتوقع، والخطوط الأخرى طبيعية. هذا يرجّح أن المشكلة في هذا الخط: صمامه أو أنبوبه أو رشاشه. السبب الدقيق يُعرف بالفحص.`, `The ${names(fp.low)} line sensor reads below expected while the other lines are normal. This suggests the problem is in that line: its valve, pipe or sprinkler. Only inspection confirms the exact cause.`);
+  if(fp.type === 'common') return tr('كل الخطوط المفتوحة ضعيفة معًا، فالسبب على الأرجح قبل التفرّع: الفلتر الرئيسي أو المضخة. ابدأ بالفلتر.', 'All open lines are weak together, so the cause is most likely before the branches: the main filter or the pump. Start with the filter.');
+  return tr('خط واحد مفتوح فقط، فلا يمكن المقارنة. الاحتمالات: الفلتر، أو الصمام، أو الرشاش، أو الأنبوب. ابدأ بالفلتر.', 'Only one line is open, so no comparison is possible. Possible causes: the filter, valve, sprinkler or pipe. Start with the filter.');
 }
 
 /* ================= المشهد (مقطع عرضي) ================= */
@@ -958,9 +982,7 @@ const Pipe = ({d, on, w = 12}) => html`<g><path d=${d} fill="none" stroke="var(-
 const Arrow = ({x, y, dir}) => { const r = {up:-90, down:90, left:180, right:0}[dir];
   return html`<path d="M-7 -7 L7 0 L-7 7 Z" transform=${`translate(${x} ${y}) rotate(${r})`} fill="var(--water)" stroke="var(--surface)" strokeWidth="1.5"/>`; };
 const Wire = ({pts}) => html`<polyline points=${pts.map(p => p.join(',')).join(' ')} fill="none" stroke="var(--wire)" strokeWidth="2.2" strokeDasharray="2 6" strokeLinecap="round" strokeLinejoin="round"/>`;
-const ValveSym = ({x, y, open, h}) => h
-  ? html`<polygon points=${`${x - 9},${y - 9} ${x + 9},${y + 9} ${x + 9},${y - 9} ${x - 9},${y + 9}`} fill=${open ? 'var(--green)' : 'var(--surface)'} stroke=${open ? 'var(--green)' : 'var(--muted)'} strokeWidth="2.5" strokeLinejoin="round"/>`
-  : html`<polygon points=${`${x - 10},${y - 9} ${x + 10},${y + 9} ${x + 10},${y - 9} ${x - 10},${y + 9}`} fill=${open ? 'var(--green)' : 'var(--surface)'} stroke=${open ? 'var(--green)' : 'var(--muted)'} strokeWidth="2.5" strokeLinejoin="round"/>`;
+const ValveSym = ({x, y, open}) => html`<polygon points=${`${x - 10},${y - 9} ${x + 10},${y + 9} ${x + 10},${y - 9} ${x - 10},${y + 9}`} fill=${open ? 'var(--green)' : 'var(--surface)'} stroke=${open ? 'var(--green)' : 'var(--muted)'} strokeWidth="2.5" strokeLinejoin="round"/>`;
 const FlowSym = ({x, y, warn}) => html`<g><rect x=${x - 14} y=${y - 11} width="28" height="22" rx="5" fill="var(--surface)" stroke=${warn ? 'var(--warn)' : 'var(--water)'} strokeWidth="2.5"/>
   <circle cx=${x} cy=${y} r="6" fill="none" stroke=${warn ? 'var(--warn)' : 'var(--water)'} strokeWidth="2"/><line x1=${x - 6} y1=${y} x2=${x + 6} y2=${y} stroke=${warn ? 'var(--warn)' : 'var(--water)'} strokeWidth="2"/></g>`;
 const ProbeSym = ({x, y, col, len = 70}) => html`<g><line x1=${x} y1=${y} x2=${x} y2=${y + len} stroke="var(--ink)" strokeWidth="6" strokeLinecap="round" opacity="0.7"/>
@@ -972,48 +994,49 @@ const PumpSym = ({x, y, on, spin}) => html`<g><circle cx=${x} cy=${y} r="17" fil
 function Scene({st, set, sel, onSel, onAct}){
   const pct = tankPct(st), hot = st.temp >= 40;
   const ref = useRef(null), drag = useRef(null);
-  const T = {x:720, y:410, w:220, h:170}, wy = T.y + T.h * (1 - pct / 100);
+  const T0 = {x:720, y:410, w:220, h:170}, wy = T0.y + T0.h * (1 - pct / 100);
   const FX = [500, 280, 60], CX = FX.map(x => x + 165), PX = FX.map(x => x + 30);
   const MAIN = 360, PUMP = {x:760, y:548};
   const v = st.zones.map(z => z.valve);
   const fc = st.ff > 0.8 ? 'var(--green)' : st.ff > 0.3 ? 'var(--warn)' : 'var(--crit)';
-  let wave = `M${T.x - 56} ${wy}`; for(let x = 0; x < (T.w + 112) / 28; x++) wave += ' q14 -5 28 0';
-  wave += ` L${T.x + T.w + 56} ${T.y + T.h + 4} L${T.x - 56} ${T.y + T.h + 4} Z`;
+  let wave = `M${T0.x - 56} ${wy}`; for(let x = 0; x < (T0.w + 112) / 28; x++) wave += ' q14 -5 28 0';
+  wave += ` L${T0.x + T0.w + 56} ${T0.y + T0.h + 4} L${T0.x - 56} ${T0.y + T0.h + 4} Z`;
   const pt = e => { const s = ref.current, p = s.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; return p.matrixTransform(s.getScreenCTM().inverse()); };
   const setFrom = (d, y) => {
     if(d.type === 'zone'){ const m = Math.max(12, Math.min(85, 85 - (y - 110) / 140 * 73)); onAct(s => ({...s, zones:s.zones.map((z, i) => i === d.i ? {...z, m} : z)})); }
-    else { const p = Math.max(2, Math.min(100, (T.y + T.h - y) / T.h * 100)); onAct(s => ({...s, tankL:p * CAP / 100})); } };
+    else { const p = Math.max(2, Math.min(100, (T0.y + T0.h - y) / T0.h * 100)); onAct(s => ({...s, tankL:p * CAP / 100})); } };
   const move = e => { const d = drag.current; if(!d) return; const y = pt(e).y; if(!d.moved && Math.abs(y - d.y0) < 6) return; d.moved = true; setFrom(d, y); };
   const down = (type, i) => e => { drag.current = {type, i, y0:pt(e).y, moved:false}; try{ ref.current.setPointerCapture(e.pointerId); }catch(_){} };
   const up = e => { const d = drag.current; drag.current = null; if(!d) return; if(!d.moved){ if(d.type === 'zone') onSel(sel === d.i ? null : d.i); else setFrom(d, pt(e).y); } };
   const tap = fn => ({onClick:() => onAct(fn), onKeyDown:e => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); onAct(fn); } }, tabIndex:'0', role:'button', className:'tapme'});
   const low = z => z.valve && z.flow < .75 * z.expected;
   const segOn = [st.pump, v[1] || v[2], v[2]];
-  return html`<svg ref=${ref} viewBox="0 0 1000 640" role="img" aria-label="مقطع عرضي تفاعلي للنظام: ثلاث مناطق زراعية برشاشات، وأنابيب ري، وحساسات موصولة بصندوق التحكم، وخزان أرضي بمضخة غاطسة، وصهريج تعبئة"
+  const Lt = tr('لتر', 'L');
+  return html`<svg ref=${ref} viewBox="0 0 1000 640" role="img" aria-label=${tr('مقطع عرضي تفاعلي للنظام: ثلاث مناطق زراعية برشاشات، وأنابيب ري، وحساسات موصولة بصندوق التحكم، وخزان أرضي بمضخة غاطسة، وصهريج تعبئة', 'Interactive cross-section: three planted zones with sprinklers, irrigation pipes, sensors wired to the control box, a ground tank with a submersible pump, and a filling tanker')}
       onPointerMove=${move} onPointerUp=${up} onPointerCancel=${() => { drag.current = null; }}>
     <defs>
       <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor=${hot ? 'var(--warn-soft)' : 'var(--sky1)'}/><stop offset="1" stopColor="var(--sky2)"/></linearGradient>
-      <clipPath id="tk"><rect x=${T.x} y=${T.y} width=${T.w} height=${T.h} rx="16"/></clipPath>
+      <clipPath id="tk"><rect x=${T0.x} y=${T0.y} width=${T0.w} height=${T0.h} rx="16"/></clipPath>
     </defs>
     <rect width="1000" height="250" fill="url(#sky)"/>
     <rect y="250" width="1000" height="390" fill="var(--earth)"/>
     <rect y="244" width="1000" height="9" fill="var(--grass)"/>
-    <text x="20" y="448" fontSize="15" fontWeight="700" fill="var(--muted)">تحت سطح الأرض</text>
+    <text x="20" y="448" fontSize="15" fontWeight="700" fill="var(--muted)">${tr('تحت سطح الأرض', 'Below ground')}</text>
     ${!hot && html`<g fill="var(--cloud)" opacity="0.9"><ellipse cx="300" cy="62" rx="40" ry="14"/><ellipse cx="330" cy="52" rx="24" ry="14"/></g>`}
 
     <g><rect x="390" y="10" width="220" height="38" rx="19" fill="var(--warn-soft)" stroke="var(--warn)" strokeWidth="2" strokeDasharray="6 4"/>
-      <text x="500" y="35" textAnchor="middle" fontSize="18" fontWeight="800" fill="var(--warn)">بيانات محاكاة</text></g>
+      <text x="500" y="35" textAnchor="middle" fontSize="18" fontWeight="800" fill="var(--warn)">${tr('بيانات محاكاة', 'Simulated data')}</text></g>
 
-    <g ...${tap(s => ({...s, temp:s.temp >= 40 ? 31 : 45}))} aria-label="درجة الحرارة: اضغط لتبديل اليوم بين عادي وحار">
+    <g ...${tap(s => ({...s, temp:s.temp >= 40 ? 31 : 45}))} aria-label=${tr('درجة الحرارة: اضغط لتبديل اليوم بين عادي وحار', 'Temperature: tap to switch between a normal and a hot day')}>
       <rect x="16" y="10" width="232" height="38" rx="19" fill="var(--surface)" stroke=${hot ? 'var(--sun-hot)' : 'var(--line)'} strokeWidth="2"/>
       <circle cx="40" cy="29" r=${hot ? 11 : 9} fill=${hot ? 'var(--sun-hot)' : 'var(--sun)'}/>
       ${[0, 45, 90, 135, 180, 225, 270, 315].map(a => html`<line key=${a} x1="40" y1="13" x2="40" y2="16" stroke=${hot ? 'var(--sun-hot)' : 'var(--sun)'} strokeWidth="2.5" strokeLinecap="round" transform=${`rotate(${a} 40 29)`}/>`)}
-      <text x="60" y="35" fontSize="17" fontWeight="800" fill="var(--ink)">${n0(st.temp)}°م</text>
-      <text x="112" y="35" fontSize="13" fill="var(--muted)">حرارة (رقم محاكاة)</text></g>
+      <text x="60" y="35" fontSize="17" fontWeight="800" fill="var(--ink)">${n0(st.temp)}°${tr('م', 'C')}</text>
+      <text x="112" y="35" fontSize="13" fill="var(--muted)">${tr('حرارة (رقم محاكاة)', 'temp. (simulated)')}</text></g>
 
     ${st.zones.map((z, i) => {
-      const x = FX[i], cx = CX[i], px = PX[i], wet = Math.max(0, Math.min(1, (z.m - 15) / 60)), L = ledOf(z.m);
-      const lf = L === 'dry' ? 'var(--leaf-dry)' : 'var(--leaf)', droop = L === 'dry' ? 30 : 0;
+      const x = FX[i], cx = CX[i], px = PX[i], wet = Math.max(0, Math.min(1, (z.m - 15) / 60)), Ld = ledOf(z.m);
+      const lf = Ld === 'dry' ? 'var(--leaf-dry)' : 'var(--leaf)', droop = Ld === 'dry' ? 30 : 0;
       return html`<g key=${i}>
         <rect x=${x} y="190" width="180" height="60" rx="12" fill="var(--soil-dry)"/>
         <rect x=${x} y="190" width="180" height="60" rx="12" fill="var(--soil-wet)" style=${{opacity:wet * .9, transition:'opacity .8s'}}/>
@@ -1021,7 +1044,7 @@ function Scene({st, set, sel, onSel, onAct}){
           <line x1=${qx} y1=${qy} x2=${qx} y2=${qy - 20} stroke=${lf} strokeWidth="3" strokeLinecap="round"/>
           <ellipse cx=${qx - 8} cy=${qy - 18} rx="9" ry="5" fill=${lf} transform=${`rotate(${-20 + droop} ${qx} ${qy - 18})`}/>
           <ellipse cx=${qx + 8} cy=${qy - 20} rx="9" ry="5" fill=${lf} transform=${`rotate(${20 - droop} ${qx} ${qy - 20})`}/></g>`; })}
-        <${ProbeSym} x=${px} y=${206} col=${LED_COL[L]} len=${94}/>
+        <${ProbeSym} x=${px} y=${206} col=${LED_COL[Ld]} len=${94}/>
         <${Pipe} d=${`M${cx} ${MAIN} L${cx} 182`} on=${v[i]} w=${10}/>
         <rect x=${cx - 8} y="174" width="16" height="10" rx="3" fill="var(--ink)"/>
         ${v[i] && html`<g><path d=${`M${cx} 176 q -24 -26 -46 16`} fill="none" stroke="var(--water-l)" strokeWidth="3" className="flowline"/>
@@ -1029,14 +1052,14 @@ function Scene({st, set, sel, onSel, onAct}){
           ${[-38, -22].map((o, k) => html`<ellipse key=${o} className="drop" cx=${cx + o} cy="180" rx="2.5" ry="4" fill="var(--water-l)" style=${{animationDelay:k * .3 + 's'}}/>`)}
           <${Arrow} x=${cx} y=${232} dir="up"/></g>`}
         <${FlowSym} x=${cx} y=${290} warn=${low(z)}/>
-        <text x=${cx - 20} y="296" textAnchor="end" fontSize="17" fontWeight="800" fill=${low(z) ? 'var(--warn)' : 'var(--ink)'}>${n1(z.flow)} ل/د</text>
+        <text x=${cx - 20} y="296" textAnchor="end" fontSize="17" fontWeight="800" fill=${low(z) ? 'var(--warn)' : 'var(--ink)'}>${n1(z.flow)} ${LPM()}</text>
         <${ValveSym} x=${cx} y=${330} open=${v[i]}/>
-        <text x=${x + 75} y="114" textAnchor="middle" fontSize="22" fontWeight="800" fill="var(--ink)">${z.name}</text>
-        <rect x=${x + 15} y="126" width="120" height="44" rx="22" fill="var(--surface)" stroke=${LED_COL[L]} strokeWidth="3.5"/>
+        <text x=${x + 75} y="114" textAnchor="middle" fontSize="22" fontWeight="800" fill="var(--ink)">${zn(z)}</text>
+        <rect x=${x + 15} y="126" width="120" height="44" rx="22" fill="var(--surface)" stroke=${LED_COL[Ld]} strokeWidth="3.5"/>
         <text x=${x + 75} y="157" textAnchor="middle" fontSize="27" fontWeight="800" fill="var(--ink)" fontFamily="Alexandria, sans-serif">${P(z.m)}</text>
         ${sel === i && html`<rect x=${x - 8} y="88" width="196" height="170" rx="16" fill="none" stroke="var(--water)" strokeWidth="3" strokeDasharray="8 6"/>`}
         <rect className="zone-hit" x=${x - 8} y="88" width="196" height="170" fill="transparent" onPointerDown=${down('zone', i)} tabIndex="0" role="button"
-          aria-label=${`${z.name}: رطوبة ${P(z.m)}. اضغط لعرض التفاصيل، أو اسحب لأعلى وأسفل لتغيير الرطوبة`} aria-pressed=${sel === i}
+          aria-label=${tr(`${zn(z)}: رطوبة ${P(z.m)}. اضغط لعرض التفاصيل، أو اسحب لأعلى وأسفل لتغيير الرطوبة`, `${zn(z)}: moisture ${P(z.m)}. Tap for details, or drag up and down to change moisture`)} aria-pressed=${sel === i}
           onKeyDown=${e => { const d = e.key === 'ArrowUp' ? 3 : e.key === 'ArrowDown' ? -3 : 0; if(d){ e.preventDefault(); onAct(s => ({...s, zones:s.zones.map((zz, j) => j === i ? {...zz, m:Math.max(12, Math.min(85, zz.m + d))} : zz)})); } else if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); onSel(sel === i ? null : i); } }}/>
       </g>`; })}
 
@@ -1046,10 +1069,10 @@ function Scene({st, set, sel, onSel, onAct}){
     ${segOn[0] && html`<g><${Arrow} x=${PUMP.x} y=${390} dir="up"/><${Arrow} x=${690} y=${MAIN} dir="left"/></g>`}
     ${segOn[1] && html`<${Arrow} x=${(CX[0] + CX[1]) / 2} y=${MAIN} dir="left"/>`}
     ${segOn[2] && html`<${Arrow} x=${(CX[1] + CX[2]) / 2} y=${MAIN} dir="left"/>`}
-    <g ...${tap(s => ({...s, ff:s.ff > 0.8 ? 0.5 : s.ff > 0.3 ? 0.12 : 1}))} aria-label="الفلتر الرئيسي: اضغط لتغيير حالته">
+    <g ...${tap(s => ({...s, ff:s.ff > 0.8 ? 0.5 : s.ff > 0.3 ? 0.12 : 1}))} aria-label=${tr('الفلتر الرئيسي: اضغط لتغيير حالته', 'Main filter: tap to change its condition')}>
       <rect x="716" y="344" width="30" height="32" rx="6" fill="var(--surface)" stroke=${fc} strokeWidth="3"/>
       ${[0, 1, 2].map(k => html`<line key=${k} x1="721" x2="741" y1=${352 + k * 8} y2=${352 + k * 8} stroke=${fc} strokeWidth="2"/>`)}
-      <text x="731" y="335" textAnchor="middle" fontSize="15" fontWeight="700" fill=${fc}>الفلتر</text></g>
+      <text x="731" y="335" textAnchor="middle" fontSize="15" fontWeight="700" fill=${fc}>${tr('الفلتر', 'Filter')}</text></g>
 
     ${[0, 1, 2].map(i => { const ym = [404, 398, 392][i], yf = [424, 418, 412][i], am = [505, 420, 355][i], af = [528, 442, 377][i];
       return html`<g key=${'w' + i}><${Wire} pts=${[[PX[i], 300], [PX[i], ym], [am, ym], [am, 432]]}/>
@@ -1059,56 +1082,55 @@ function Scene({st, set, sel, onSel, onAct}){
     <g><rect x="340" y="432" width="220" height="74" rx="14" fill="var(--concrete)" stroke="var(--muted)" strokeWidth="2"/>
       <rect x="352" y="446" width="64" height="46" rx="5" fill="var(--water)"/>
       <text x="384" y="474" textAnchor="middle" fontSize="12" fontWeight="700" fill="#fff">Arduino</text>
-      <text x="428" y="466" fontSize="17" fontWeight="800" fill="var(--ink)">صندوق التحكم</text>
+      <text x="428" y="466" fontSize="17" fontWeight="800" fill="var(--ink)">${tr('صندوق التحكم', 'Control box')}</text>
       <circle cx="538" cy="480" r="10" fill=${st.buzzer ? 'var(--crit)' : 'var(--surface)'} stroke="var(--crit)" strokeWidth="2" className=${st.buzzer ? 'blink' : ''}/></g>
-    <text x="450" y="532" textAnchor="middle" fontSize="15" fontWeight="700" fill=${st.buzzer ? 'var(--crit)' : 'var(--muted)'}>${st.buzzer ? 'تنبيه انخفاض مستوى المياه يعمل!' : 'لا يوجد تنبيه انخفاض مستوى المياه'}</text>
+    <text x="450" y="532" textAnchor="middle" fontSize="15" fontWeight="700" fill=${st.buzzer ? 'var(--crit)' : 'var(--muted)'}>${st.buzzer ? tr('تنبيه انخفاض مستوى المياه يعمل!', 'Low water-level alert is ON!') : tr('لا يوجد تنبيه انخفاض مستوى المياه', 'No low water-level alert')}</text>
 
-    <rect x=${T.x} y=${T.y} width=${T.w} height=${T.h} rx="16" fill="var(--surface)" stroke="var(--concrete)" strokeWidth="8"/>
+    <rect x=${T0.x} y=${T0.y} width=${T0.w} height=${T0.h} rx="16" fill="var(--surface)" stroke="var(--concrete)" strokeWidth="8"/>
     <g clipPath="url(#tk)"><g className=${st.pump || st.filling ? 'wave' : ''}><path d=${wave} fill="var(--water-l)" opacity="0.8"/></g></g>
-    ${[[set.tankFull, 'امتلاء'], [set.tankMin, 'حماية']].map(([l, t]) => { const y = T.y + T.h * (1 - l / 100); return html`<g key=${t}>
-      <line x1=${T.x} y1=${y} x2=${T.x + T.w} y2=${y} stroke="var(--crit)" strokeDasharray="5 4" strokeWidth="2"/>
-      <text x=${T.x + T.w - 10} y=${y - 5} textAnchor="end" fontSize="13" fontWeight="700" fill="var(--crit)">${t}</text></g>`; })}
-    <${Pipe} d=${`M${PUMP.x} ${PUMP.y - 17} L${PUMP.x} ${T.y}`} on=${st.pump}/>
+    ${[[set.tankFull, tr('امتلاء', 'Full')], [set.tankMin, tr('حماية', 'Min')]].map(([l, t]) => { const y = T0.y + T0.h * (1 - l / 100); return html`<g key=${l}>
+      <line x1=${T0.x} y1=${y} x2=${T0.x + T0.w} y2=${y} stroke="var(--crit)" strokeDasharray="5 4" strokeWidth="2"/>
+      <text x=${T0.x + T0.w - 10} y=${y - 5} textAnchor="end" fontSize="13" fontWeight="700" fill="var(--crit)">${t}</text></g>`; })}
+    <${Pipe} d=${`M${PUMP.x} ${PUMP.y - 17} L${PUMP.x} ${T0.y}`} on=${st.pump}/>
     <${PumpSym} x=${PUMP.x} y=${PUMP.y} on=${st.pump} spin=${true}/>
     <rect x="790" y="396" width="28" height="14" rx="3" fill="var(--ink)"/>
     <line x1="804" y1="410" x2="804" y2=${wy} stroke="var(--ink)" strokeDasharray="3 4" opacity="0.6"/>
     <text x="850" y="492" textAnchor="middle" fontSize="30" fontWeight="800" fill="var(--ink)" fontFamily="Alexandria, sans-serif">${P(pct)}</text>
-    <text x="850" y="516" textAnchor="middle" fontSize="16" fontWeight="600" fill="var(--ink)">${n0(st.tankL)} لتر</text>
-    <rect className="drag" x=${T.x} y=${T.y} width=${T.w} height=${T.h} rx="16" fill="transparent" onPointerDown=${down('tank')} tabIndex="0" role="slider" aria-valuenow=${Math.round(pct)} aria-label="الخزان: اسحب لتغيير مستوى الماء"
+    <text x="850" y="516" textAnchor="middle" fontSize="16" fontWeight="600" fill="var(--ink)">${n0(st.tankL)} ${Lt}</text>
+    <rect className="drag" x=${T0.x} y=${T0.y} width=${T0.w} height=${T0.h} rx="16" fill="transparent" onPointerDown=${down('tank')} tabIndex="0" role="slider" aria-valuenow=${Math.round(pct)} aria-label=${tr('الخزان: اسحب لتغيير مستوى الماء', 'Tank: drag to change the water level')}
       onKeyDown=${e => { const d = e.key === 'ArrowUp' ? 5 : e.key === 'ArrowDown' ? -5 : 0; if(d){ e.preventDefault(); onAct(s => ({...s, tankL:Math.max(20, Math.min(CAP, s.tankL + d * CAP / 100))})); } }}/>
     <line x1="812" y1="397" x2="826" y2="388" stroke="var(--ink)" strokeWidth="1.5"/><circle cx="812" cy="397" r="3" fill="var(--ink)"/>
-    <text x="872" y="386" textAnchor="middle" fontSize="15" fontWeight="700" fill="var(--ink)">حساس المسافة</text>
+    <text x="872" y="386" textAnchor="middle" fontSize="15" fontWeight="700" fill="var(--ink)">${tr('حساس المسافة', 'Distance sensor')}</text>
     <line x1="930" y1="572" x2="930" y2="604" stroke="var(--ink)" strokeWidth="1.5"/><circle cx="930" cy="572" r="3" fill="var(--ink)"/>
-    <text x="938" y="624" textAnchor="end" fontSize="16" fontWeight="800" fill="var(--ink)">الخزان الأرضي (${n0(CAP)} لتر)</text>
+    <text x="938" y="624" textAnchor="end" fontSize="16" fontWeight="800" fill="var(--ink)">${tr(`الخزان الأرضي (${n0(CAP)} لتر)`, `Ground tank (${CAP} L)`)}</text>
     <line x1=${PUMP.x - 16} y1=${PUMP.y + 8} x2="700" y2="604" stroke="var(--ink)" strokeWidth="1.5"/><circle cx=${PUMP.x - 16} cy=${PUMP.y + 8} r="3" fill="var(--ink)"/>
-    <text x="704" y="624" textAnchor="end" fontSize="15" fontWeight="700" fill=${st.pump ? 'var(--green)' : 'var(--muted)'}>المضخة الغاطسة · ${st.pump ? 'تعمل' : 'متوقفة'}</text>
+    <text x="704" y="624" textAnchor="end" fontSize="15" fontWeight="700" fill=${st.pump ? 'var(--green)' : 'var(--muted)'}>${tr('المضخة الغاطسة', 'Submersible pump')} · ${st.pump ? tr('تعمل', 'running') : tr('متوقفة', 'stopped')}</text>
 
     <${Pipe} d="M930 236 L930 404" on=${st.filling} w=${10}/>
     ${st.filling && html`<g><${Arrow} x=${930} y=${320} dir="down"/>${[0, 1, 2].map(k => html`<ellipse key=${k} className="drop" cx="930" cy="414" rx="3" ry="5" fill="var(--water-l)" style=${{animationDelay:k * .3 + 's'}}/>`)}</g>`}
-    <g ...${tap(s => ({...s, filling:!s.filling, inflow:10}))} aria-label="محبس الصهريج: اضغط للفتح أو الإغلاق">
+    <g ...${tap(s => ({...s, filling:!s.filling, inflow:10}))} aria-label=${tr('محبس الصهريج: اضغط للفتح أو الإغلاق', 'Tanker valve: tap to open or close')}>
       <rect x="836" y="176" width="140" height="48" rx="22" fill="var(--surface)" stroke="var(--water)" strokeWidth="3"/>
       <rect x="806" y="190" width="32" height="38" rx="6" fill="var(--water)"/>
       ${[822, 880, 960].map(x => html`<circle key=${x} cx=${x} cy="232" r="9" fill="var(--ink)"/>`)}
       <circle cx="930" cy="226" r="9" fill=${st.filling ? 'var(--water)' : 'var(--surface)'} stroke="var(--water)" strokeWidth="2.5"/>
-      <text x="900" y="166" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--water)">صهريج · ${st.filling ? 'يعبّئ' : 'متوقف'}</text></g>
+      <text x="900" y="166" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--water)">${tr('صهريج', 'Tanker')} · ${st.filling ? tr('يعبّئ', 'filling') : tr('متوقف', 'idle')}</text></g>
 
     <line x1="740" y1="248" x2="740" y2="130" stroke="var(--muted)" strokeWidth="4"/>
     <path d="M732 114 L752 106 L752 134 L732 126 Z" fill=${st.siren ? 'var(--crit)' : 'var(--muted)'} className=${st.siren ? 'blink' : ''}/>
     ${st.siren && [0, 1, 2].map(k => html`<path key=${k} d=${`M${760 + k * 9} 106 q 8 14 0 28`} fill="none" stroke="var(--crit)" strokeWidth="3" strokeLinecap="round" className="blink"/>`)}
-    <text x="742" y="96" textAnchor="middle" fontSize="15" fontWeight="700" fill=${st.siren ? 'var(--crit)' : 'var(--muted)'}>صفارة الامتلاء</text>
+    <text x="742" y="96" textAnchor="middle" fontSize="15" fontWeight="700" fill=${st.siren ? 'var(--crit)' : 'var(--muted)'}>${tr('صفارة الامتلاء', 'Full-tank siren')}</text>
 
     <g transform="translate(18 470)">
       <rect width="306" height="150" rx="14" fill="var(--surface)" stroke="var(--line)" strokeWidth="1.5" opacity="0.96"/>
-      <text x="290" y="26" textAnchor="end" fontSize="15" fontWeight="800" fill="var(--ink)">مفتاح الرموز</text>
-      <g transform="translate(0 0)">
-        <${ProbeSym} x=${284} y=${52} col="var(--green)" len=${22}/><text x="268" y="62" textAnchor="end" fontSize="14" fill="var(--ink)">حساس الرطوبة</text>
-        <${FlowSym} x=${284} y=${94}/><text x="264" y="99" textAnchor="end" fontSize="14" fill="var(--ink)">حساس التدفق</text>
-        <${ValveSym} x=${284} y=${130} open=${true}/><text x="264" y="135" textAnchor="end" fontSize="14" fill="var(--ink)">صمام</text>
-        <${PumpSym} x=${142} y=${56} on=${true} spin=${false}/><text x="122" y="61" textAnchor="end" fontSize="14" fill="var(--ink)">مضخة</text>
-        <path d="M128 94 L158 94" stroke="var(--pipe)" strokeWidth="10" strokeLinecap="round"/><path d="M128 94 L158 94" stroke="var(--water-l)" strokeWidth="4" strokeLinecap="round"/>
-        <text x="122" y="99" textAnchor="end" fontSize="14" fill="var(--ink)">أنبوب مياه</text>
-        <${Wire} pts=${[[128, 130], [158, 130]]}/><text x="122" y="135" textAnchor="end" fontSize="14" fill="var(--ink)">توصيل حساس</text>
-      </g></g>
+      <text x=${LANG === 'en' ? 16 : 290} y="26" textAnchor=${LANG === 'en' ? 'start' : 'end'} fontSize="15" fontWeight="800" fill="var(--ink)">${tr('مفتاح الرموز', 'Symbol key')}</text>
+      <${ProbeSym} x=${284} y=${52} col="var(--green)" len=${22}/><text x="268" y="62" textAnchor="end" fontSize="14" fill="var(--ink)">${tr('حساس الرطوبة', 'Moisture sensor')}</text>
+      <${FlowSym} x=${284} y=${94}/><text x="264" y="99" textAnchor="end" fontSize="14" fill="var(--ink)">${tr('حساس التدفق', 'Flow sensor')}</text>
+      <${ValveSym} x=${284} y=${130} open=${true}/><text x="264" y="135" textAnchor="end" fontSize="14" fill="var(--ink)">${tr('صمام', 'Valve')}</text>
+      <${PumpSym} x=${142} y=${56} on=${true} spin=${false}/><text x="122" y="61" textAnchor="end" fontSize="14" fill="var(--ink)">${tr('مضخة', 'Pump')}</text>
+      <path d="M128 94 L158 94" stroke="var(--pipe)" strokeWidth="10" strokeLinecap="round"/><path d="M128 94 L158 94" stroke="var(--water-l)" strokeWidth="4" strokeLinecap="round"/>
+      <text x="122" y="99" textAnchor="end" fontSize="14" fill="var(--ink)">${tr('أنبوب مياه', 'Water pipe')}</text>
+      <${Wire} pts=${[[128, 130], [158, 130]]}/><text x="122" y="135" textAnchor="end" fontSize="14" fill="var(--ink)">${tr('توصيل حساس', 'Sensor wire')}</text>
+    </g>
   </svg>`;
 }
 function SceneBox(props){
@@ -1116,11 +1138,11 @@ function SceneBox(props){
   const fsOk = typeof document !== 'undefined' && document.fullscreenEnabled;
   const full = () => { try{ if(document.fullscreenElement) document.exitFullscreen(); else box.current.requestFullscreen().catch(() => {}); }catch(_){} };
   return html`<div className="scene" ref=${box}>
-    <div className="zoombar" role="group" aria-label="تكبير الرسم">
-      <button onClick=${() => setZ(v => Math.min(2.5, +(v + .5).toFixed(1)))} disabled=${z >= 2.5} aria-label="تكبير">+</button>
-      <button onClick=${() => setZ(v => Math.max(1, +(v - .5).toFixed(1)))} disabled=${z <= 1} aria-label="تصغير">−</button>
-      ${z > 1 && html`<button className="zl" onClick=${() => setZ(1)}>${ad(Math.round(z * 100))}٪</button>`}
-      ${fsOk && html`<button className="zl" onClick=${full}>ملء الشاشة</button>`}
+    <div className="zoombar" role="group" aria-label=${tr('تكبير الرسم', 'Zoom the drawing')}>
+      <button onClick=${() => setZ(v => Math.min(2.5, +(v + .5).toFixed(1)))} disabled=${z >= 2.5} aria-label=${tr('تكبير', 'Zoom in')}>+</button>
+      <button onClick=${() => setZ(v => Math.max(1, +(v - .5).toFixed(1)))} disabled=${z <= 1} aria-label=${tr('تصغير', 'Zoom out')}>−</button>
+      ${z > 1 && html`<button className="zl" onClick=${() => setZ(1)}>${ad(Math.round(z * 100))}${tr('٪', '%')}</button>`}
+      ${fsOk && html`<button className="zl" onClick=${full}>${tr('ملء الشاشة', 'Full screen')}</button>`}
     </div>
     <div className="scene-scroll"><div className="scene-inner" style=${{width:z * 100 + '%'}}><${Scene} ...${props}/></div></div>
   </div>`;
@@ -1132,48 +1154,50 @@ function mainForecast(st, set){
   const dry = f.filter(o => o.type === 'dry').sort((a, b) => a.h - b.h)[0];
   const wet = f.filter(o => o.type === 'wet').sort((a, b) => b.h - a.h)[0];
   const waiting = f.filter(o => o.type === 'now' && !o.z.valve).map(o => o.z);
-  const tankR = ['مستوى الخزان', `${P(pct)} (${n0(st.tankL)} لتر)`];
+  const Lt = tr('لتر', 'L');
+  const tankR = [tr('مستوى الخزان', 'Tank level'), `${P(pct)} (${n0(st.tankL)} ${Lt})`];
   if(st.filling){
     const net = st.inflow - st.flow, h = (set.tankFull - pct) * CAP / 100 / Math.max(net, .1) / 60, hf = (100 - pct) * CAP / 100 / Math.max(net, .1) / 60;
-    if(st.siren) return {tone:'crit', title:`سيفيض الخزان خلال ${dur(hf)} إذا استمرت التعبئة`, basis:[tankR, ['سرعة الارتفاع', `${n1(net)} لتر/دقيقة`], ['حد الصفارة', P(set.tankFull)]], action:'يُغلق سائق الصهريج المحبس الآن. النظام ينبّه فقط ولا يتحكم في الصهريج.'};
-    return {tone:'warn', title:`ستنطلق صفارة الامتلاء خلال ${dur(h)}`, basis:[tankR, ['سرعة الارتفاع', `${n1(net)} لتر/دقيقة`], ['حد الصفارة', P(set.tankFull)]], action:'يبقى السائق قرب الخزان ليُغلق المحبس عند سماع الصفارة.'};
+    const basis = [tankR, [tr('سرعة الارتفاع', 'Rise rate'), `${n1(net)} ${LPM()}`], [tr('حد الصفارة', 'Siren limit'), P(set.tankFull)]];
+    if(st.siren) return {tone:'crit', title:tr(`سيفيض الخزان خلال ${dur(hf)} إذا استمرت التعبئة`, `The tank will overflow in ${dur(hf)} if filling continues`), basis, action:tr('يُغلق سائق الصهريج المحبس الآن. النظام ينبّه فقط ولا يتحكم في الصهريج.', 'The tanker driver closes the valve now. The system only alerts; it does not control the tanker.')};
+    return {tone:'warn', title:tr(`ستنطلق صفارة الامتلاء خلال ${dur(h)}`, `The full-tank siren will sound in ${dur(h)}`), basis, action:tr('يبقى السائق قرب الخزان ليُغلق المحبس عند سماع الصفارة.', 'The driver stays near the tank to close the valve when the siren sounds.')};
   }
-  if(st.protect) return {tone:'crit', title:waiting.length ? `لن تُروى ${names(waiting)} حتى تعبئة الخزان` : 'الري متوقف حتى تعبئة الخزان',
-    basis:[tankR, ['حد حماية المضخة', P(set.tankMin)], ...waiting.map(z => [`رطوبة ${z.name}`, `${P(z.m)} (أحمر)`])], action:`اطلب الصهريج الآن. يعود الري تلقائيًا عند ${P(set.tankResume)}.`};
-  if(st.lockout) return {tone:'crit', title:'الري متوقف حتى فحص الأنابيب', basis:[['مجموع التدفق', `${n1(st.flow)} لتر/دقيقة`]], action:'افحص الفلتر والأنابيب، ثم أعد تشغيل المضخة.'};
+  if(st.protect) return {tone:'crit', title:waiting.length ? tr(`لن تُروى ${names(waiting)} حتى تعبئة الخزان`, `${names(waiting)} will not be irrigated until the tank is refilled`) : tr('الري متوقف حتى تعبئة الخزان', 'Irrigation is paused until the tank is refilled'),
+    basis:[tankR, [tr('حد حماية المضخة', 'Pump protection limit'), P(set.tankMin)], ...waiting.map(z => [tr(`رطوبة ${zn(z)}`, `${zn(z)} moisture`), `${P(z.m)} (${tr('أحمر', 'red')})`])], action:tr(`اطلب الصهريج الآن. يعود الري تلقائيًا عند ${P(set.tankResume)}.`, `Call the tanker now. Irrigation resumes automatically at ${P(set.tankResume)}.`)};
+  if(st.lockout) return {tone:'crit', title:tr('الري متوقف حتى فحص الأنابيب', 'Irrigation is paused until the pipes are inspected'), basis:[[tr('مجموع التدفق', 'Total flow'), `${n1(st.flow)} ${LPM()}`]], action:tr('افحص الفلتر والأنابيب، ثم أعد تشغيل المضخة.', 'Inspect the filter and pipes, then restart the pump.')};
   if(fp && fp.type !== 'ok'){
-    const basis = fp.open.map(z => [`تدفق ${z.name}`, `${n1(z.flow)} من ${n1(z.expected)} ل/د`]);
-    if(fp.type === 'local') return {tone:'warn', title:`الأرجح أن المشكلة في خط ${names(fp.low)}، لأن الخطوط الأخرى طبيعية`, basis, action:`افحص صمام ${names(fp.low)} ثم أنبوبه ورشاشه. السبب يُؤكَّد بالفحص.`};
-    if(fp.type === 'common') return {tone:'warn', title:'الأرجح أن السبب قبل تفرّع الخطوط (الفلتر أو المضخة)', basis, action:'افحص الفلتر الرئيسي أولًا، ثم المضخة. السبب يُؤكَّد بالفحص.'};
-    return {tone:'warn', title:'التدفق أقل من المتوقع في الخط المفتوح', basis:[...basis, ['خطوط مفتوحة', 'خط واحد، فلا مقارنة']], action:'افحص الفلتر ثم الصمام والرشاش. السبب يُؤكَّد بالفحص.'};
+    const basis = fp.open.map(z => [tr(`تدفق ${zn(z)}`, `${zn(z)} flow`), `${n1(z.flow)} ${tr('من', 'of')} ${n1(z.expected)} ${LPM()}`]);
+    if(fp.type === 'local') return {tone:'warn', title:tr(`الأرجح أن المشكلة في خط ${names(fp.low)}، لأن الخطوط الأخرى طبيعية`, `The problem is most likely in the ${names(fp.low)} line, since the other lines are normal`), basis, action:tr(`افحص صمام ${names(fp.low)} ثم أنبوبه ورشاشه. السبب يُؤكَّد بالفحص.`, `Check the ${names(fp.low)} valve, then its pipe and sprinkler. Only inspection confirms the cause.`)};
+    if(fp.type === 'common') return {tone:'warn', title:tr('الأرجح أن السبب قبل تفرّع الخطوط (الفلتر أو المضخة)', 'The cause is most likely before the branches (filter or pump)'), basis, action:tr('افحص الفلتر الرئيسي أولًا، ثم المضخة. السبب يُؤكَّد بالفحص.', 'Check the main filter first, then the pump. Only inspection confirms the cause.')};
+    return {tone:'warn', title:tr('التدفق أقل من المتوقع في الخط المفتوح', 'Flow is below expected in the open line'), basis:[...basis, [tr('خطوط مفتوحة', 'Open lines'), tr('خط واحد، فلا مقارنة', 'one line, no comparison')]], action:tr('افحص الفلتر ثم الصمام والرشاش. السبب يُؤكَّد بالفحص.', 'Check the filter, then the valve and sprinkler. Only inspection confirms the cause.')};
   }
-  if(pct < set.tankWarn && st.pump && st.flow > 0) { const h = Math.max(0, usable) / st.flow / 60;
-    return {tone:'crit', title:`ستتوقف المضخة لحمايتها خلال ${dur(h)}، وقد لا يكتمل ري ${names(st.zones.filter(z => z.valve))}`, basis:[tankR, ['حد حماية المضخة', P(set.tankMin)], ['سحب المضخة الآن', `${n1(st.flow)} لتر/دقيقة`]], action:'اطلب الصهريج الآن. بعد التعبئة يعود الري تلقائيًا.'}; }
-  if(pct < set.tankWarn) { const h = usable / st.avgDaily * 24;
-    return {tone:'warn', title:`ماء الخزان يكفي ${dur(h)} فقط`, basis:[tankR, ['الاستهلاك اليومي المعتاد', `${n0(st.avgDaily)} لتر (سجل محاكاة)`], ['حد الحماية', P(set.tankMin)]], action:'اطلب الصهريج قبل وصول الخزان إلى حد الحماية.'}; }
+  if(pct < set.tankWarn && st.pump && st.flow > 0){ const h = Math.max(0, usable) / st.flow / 60;
+    return {tone:'crit', title:tr(`ستتوقف المضخة لحمايتها خلال ${dur(h)}، وقد لا يكتمل ري ${names(st.zones.filter(z => z.valve))}`, `The pump will stop for protection in ${dur(h)}, and ${names(st.zones.filter(z => z.valve))} may not finish irrigating`), basis:[tankR, [tr('حد حماية المضخة', 'Pump protection limit'), P(set.tankMin)], [tr('سحب المضخة الآن', 'Pump draw now'), `${n1(st.flow)} ${LPM()}`]], action:tr('اطلب الصهريج الآن. بعد التعبئة يعود الري تلقائيًا.', 'Call the tanker now. Irrigation resumes automatically after refilling.')}; }
+  if(pct < set.tankWarn){ const h = usable / st.avgDaily * 24;
+    return {tone:'warn', title:tr(`ماء الخزان يكفي ${dur(h)} فقط`, `Tank water lasts only ${dur(h)}`), basis:[tankR, [tr('الاستهلاك اليومي المعتاد', 'Usual daily use'), `${n0(st.avgDaily)} ${Lt} (${tr('سجل محاكاة', 'simulated log')})`], [tr('حد الحماية', 'Protection limit'), P(set.tankMin)]], action:tr('اطلب الصهريج قبل وصول الخزان إلى حد الحماية.', 'Call the tanker before the tank reaches the protection limit.')}; }
   const fast = st.zones.filter(z => z.obsRate / z.base > 1.5);
-  if(fast.length && dry) return {tone:'warn', title:`ستحتاج ${dry.z.name} إلى الري خلال ${dur(dry.h)}، أسرع من المعتاد`,
-    basis:[[`رطوبة ${dry.z.name}`, P(dry.z.m)], ['سرعة الجفاف اليوم', `${n1(dry.z.obsRate)}٪/ساعة`], ['في الأيام العادية', `${n1(dry.z.base)}٪/ساعة`], ['الحرارة', `${n0(st.temp)}°م (رقم محاكاة)`]],
-    action:'لا إجراء الآن؛ النظام يبدأ الري تلقائيًا. يُفضَّل أن يكون الري صباحًا لتقليل التبخر.'};
-  if(wet) return {tone:'info', title:`${wet.z.name} ستصل إلى حد التوقف خلال ${dur(wet.h)}`,
-    basis:[[`رطوبة ${wet.z.name}`, P(wet.z.m)], ['حد التوقف', P(set.stop[wet.i])], [`تدفق ${wet.z.name}`, `${n1(wet.z.flow)} لتر/دقيقة`]], action:'لا إجراء مطلوب؛ سيُغلق الصمام تلقائيًا.'};
-  if(dry) return {tone:'ok', title:`ستحتاج ${dry.z.name} إلى الري خلال ${dur(dry.h)}`,
-    basis:[[`رطوبة ${dry.z.name}`, P(dry.z.m)], ['يبدأ الري عند', `أقل من ${P(set.start[dry.i])}`], ['سرعة الجفاف', `${n1(dry.z.obsRate)}٪/ساعة`]], action:'لا إجراء مطلوب؛ النظام يبدأ الري تلقائيًا عندما يصير المؤشر أحمر.'};
-  return {tone:'ok', title:'لا يُتوقّع أي إجراء قريبًا', basis:[tankR], action:'لا إجراء مطلوب.'};
+  if(fast.length && dry) return {tone:'warn', title:tr(`ستحتاج ${zn(dry.z)} إلى الري خلال ${dur(dry.h)}، أسرع من المعتاد`, `${zn(dry.z)} will need irrigation in ${dur(dry.h)}, sooner than usual`),
+    basis:[[tr(`رطوبة ${zn(dry.z)}`, `${zn(dry.z)} moisture`), P(dry.z.m)], [tr('سرعة الجفاف اليوم', 'Drying rate today'), `${n1(dry.z.obsRate)}${tr('٪/ساعة', '%/h')}`], [tr('في الأيام العادية', 'On normal days'), `${n1(dry.z.base)}${tr('٪/ساعة', '%/h')}`], [tr('الحرارة', 'Temperature'), `${n0(st.temp)}°${tr('م (رقم محاكاة)', 'C (simulated)')}`]],
+    action:tr('لا إجراء الآن؛ النظام يبدأ الري تلقائيًا. يُفضَّل أن يكون الري صباحًا لتقليل التبخر.', 'No action now; the system irrigates automatically. Morning irrigation is preferred to reduce evaporation.')};
+  if(wet) return {tone:'info', title:tr(`${zn(wet.z)} ستصل إلى حد التوقف خلال ${dur(wet.h)}`, `${zn(wet.z)} will reach the stop threshold in ${dur(wet.h)}`),
+    basis:[[tr(`رطوبة ${zn(wet.z)}`, `${zn(wet.z)} moisture`), P(wet.z.m)], [tr('حد التوقف', 'Stop threshold'), P(set.stop[wet.i])], [tr(`تدفق ${zn(wet.z)}`, `${zn(wet.z)} flow`), `${n1(wet.z.flow)} ${LPM()}`]], action:tr('لا إجراء مطلوب؛ سيُغلق الصمام تلقائيًا.', 'No action needed; the valve will close automatically.')};
+  if(dry) return {tone:'ok', title:tr(`ستحتاج ${zn(dry.z)} إلى الري خلال ${dur(dry.h)}`, `${zn(dry.z)} will need irrigation in ${dur(dry.h)}`),
+    basis:[[tr(`رطوبة ${zn(dry.z)}`, `${zn(dry.z)} moisture`), P(dry.z.m)], [tr('يبدأ الري عند', 'Irrigation starts at'), tr(`أقل من ${P(set.start[dry.i])}`, `below ${P(set.start[dry.i])}`)], [tr('سرعة الجفاف', 'Drying rate'), `${n1(dry.z.obsRate)}${tr('٪/ساعة', '%/h')}`]], action:tr('لا إجراء مطلوب؛ النظام يبدأ الري تلقائيًا عندما يصير المؤشر أحمر.', 'No action needed; the system starts irrigation automatically when the indicator turns red.')};
+  return {tone:'ok', title:tr('لا يُتوقّع أي إجراء قريبًا', 'No action expected soon'), basis:[tankR], action:tr('لا إجراء مطلوب.', 'No action needed.')};
 }
 function ForecastCard({st, set}){
   const fc = mainForecast(st, set), pct = tankPct(st);
-  const extra = !st.filling && !st.protect && pct >= set.tankWarn ? `ويكفي ماء الخزان ${dur((st.tankL - set.tankMin * CAP / 100) / st.avgDaily * 24)} وفق الاستهلاك المعتاد.` : '';
+  const extra = !st.filling && !st.protect && pct >= set.tankWarn ? tr(`ويكفي ماء الخزان ${dur((st.tankL - set.tankMin * CAP / 100) / st.avgDaily * 24)} وفق الاستهلاك المعتاد.`, `Tank water lasts ${dur((st.tankL - set.tankMin * CAP / 100) / st.avgDaily * 24)} at usual consumption.`) : '';
   return html`<section className=${'fc ' + fc.tone} aria-live="polite">
-    <div className="fc-head"><span className="ic"><${Icon} d=${I.spark}/></span><h2>توقّعات مساعد الري</h2><span className="sim-tag">محاكاة تعليمية</span><span className="tag-add">تطوير مقترح</span>
-      <span className="scn">الموقف: ${SCEN[st.key].label} · ${clockStr(st.clock)}</span></div>
+    <div className="fc-head"><span className="ic"><${Icon} d=${I.spark}/></span><h2>${tr('توقّعات مساعد الري', 'Irrigation Assistant Forecast')}</h2><span className="sim-tag">${tr('محاكاة تعليمية', 'Educational simulation')}</span><span className="tag-add">${tr('تطوير مقترح', 'Proposed extension')}</span>
+      <span className="scn">${tr('الموقف', 'Scenario')}: ${T(SCEN[st.key].label)} · ${clockStr(st.clock)}</span></div>
     <div className="fc-grid">
-      <div className="fc-col"><h3><span className="n">١</span>التوقّع</h3><p className="fc-main">${fc.title}</p>${extra && html`<p className="fc-note">${extra}</p>`}</div>
-      <div className="fc-col"><h3><span className="n">٢</span>القراءات التي استند إليها</h3>
+      <div className="fc-col"><h3><span className="n">${ad(1)}</span>${tr('التوقّع', 'Forecast')}</h3><p className="fc-main">${fc.title}</p>${extra && html`<p className="fc-note">${extra}</p>`}</div>
+      <div className="fc-col"><h3><span className="n">${ad(2)}</span>${tr('القراءات التي استند إليها', 'Readings it is based on')}</h3>
         <ul className="fc-list">${fc.basis.map(([a, b]) => html`<li key=${a}><span>${a}</span><b className="num">${b}</b></li>`)}</ul></div>
-      <div className="fc-col"><h3><span className="n">٣</span>الإجراء المقترح</h3><p className="fc-act">${fc.action}</p></div>
+      <div className="fc-col"><h3><span className="n">${ad(3)}</span>${tr('الإجراء المقترح', 'Suggested action')}</h3><p className="fc-act">${fc.action}</p></div>
     </div>
-    <p className="fc-note">توقّع تعليمي بمعادلات مبسّطة من القراءات الظاهرة، وليس نموذجًا مدرَّبًا. قرارات التشغيل والحماية تبقى للنظام المنفَّذ.</p>
+    <p className="fc-note">${tr('توقّع تعليمي بمعادلات مبسّطة من القراءات الظاهرة، وليس نموذجًا مدرَّبًا. قرارات التشغيل والحماية تبقى للنظام المنفَّذ.', 'An educational forecast using simple formulas on the readings shown; not a trained model. Operating and protection decisions stay with the implemented system.')}</p>
   </section>`;
 }
 
@@ -1185,66 +1209,66 @@ function Ring({v, color, children}){
     ${children}</svg>`;
 }
 function Gauges({st, set}){
-  const pct = tankPct(st), ratio = st.expected ? st.flow / st.expected : 0;
+  const pct = tankPct(st), ratio = st.expected ? st.flow / st.expected : 0, Lt = tr('لتر', 'L');
   const tc = pct <= set.tankMin ? 'var(--crit)' : pct < set.tankWarn ? 'var(--warn)' : 'var(--water)';
   const pc = st.pump ? 'var(--green)' : (st.protect || st.lockout) ? 'var(--crit)' : 'var(--muted)';
   return html`<div className="gauges">
     <div className="gauge"><${Ring} v=${pct / 100} color=${tc}><text x="55" y="63" textAnchor="middle" fontSize="23" fontWeight="800" fill="var(--ink)">${P(pct)}</text><//>
-      <span className="lbl">الخزان الأرضي</span><span className="sub">${n0(st.tankL)} من ${n0(CAP)} لتر</span></div>
-    <div className="gauge"><${Ring} v=${st.pump ? ratio : 0} color=${st.pump && ratio < .75 ? 'var(--warn)' : 'var(--water)'}><text x="55" y="60" textAnchor="middle" fontSize="23" fontWeight="800" fill="var(--ink)">${n1(st.flow)}</text><text x="55" y="79" textAnchor="middle" fontSize="11" fill="var(--muted)">لتر/دقيقة</text><//>
-      <span className="lbl">مجموع التدفق</span><span className="sub">${st.pump ? `المتوقع ${n1(st.expected)} · اليوم ${n0(st.consumed)} لتر` : `استهلاك اليوم ${n0(st.consumed)} لتر`}</span></div>
-    <div className="gauge"><div className="face"><span className="val" style=${{color:pc}}>${st.pump ? 'تعمل' : 'متوقفة'}</span></div>
-      <span className="lbl">المضخة الغاطسة</span><span className="sub">${st.pump ? 'تسقي الآن' : st.protect ? 'ممنوعة لحمايتها' : st.lockout ? 'ممنوعة: لا تدفق' : 'كل المؤشرات خضراء'}</span></div>
+      <span className="lbl">${tr('الخزان الأرضي', 'Ground tank')}</span><span className="sub">${tr(`${n0(st.tankL)} من ${n0(CAP)} لتر`, `${n0(st.tankL)} of ${n0(CAP)} L`)}</span></div>
+    <div className="gauge"><${Ring} v=${st.pump ? ratio : 0} color=${st.pump && ratio < .75 ? 'var(--warn)' : 'var(--water)'}><text x="55" y="60" textAnchor="middle" fontSize="23" fontWeight="800" fill="var(--ink)">${n1(st.flow)}</text><text x="55" y="79" textAnchor="middle" fontSize="11" fill="var(--muted)">${tr('لتر/دقيقة', 'L/min')}</text><//>
+      <span className="lbl">${tr('مجموع التدفق', 'Total flow')}</span><span className="sub">${st.pump ? tr(`المتوقع ${n1(st.expected)} · اليوم ${n0(st.consumed)} لتر`, `expected ${n1(st.expected)} · today ${n0(st.consumed)} L`) : tr(`استهلاك اليوم ${n0(st.consumed)} لتر`, `used today ${n0(st.consumed)} L`)}</span></div>
+    <div className="gauge"><div className="face"><span className="val" style=${{color:pc}}>${st.pump ? tr('تعمل', 'Running') : tr('متوقفة', 'Stopped')}</span></div>
+      <span className="lbl">${tr('المضخة الغاطسة', 'Submersible pump')}</span><span className="sub">${st.pump ? tr('تسقي الآن', 'irrigating now') : st.protect ? tr('ممنوعة لحمايتها', 'blocked for protection') : st.lockout ? tr('ممنوعة: لا تدفق', 'blocked: no flow') : tr('كل المؤشرات خضراء', 'all indicators green')}</span></div>
     <div className="gauge"><div className="face">
-        <span className=${'alarm' + (st.siren ? ' on' : '')}><i></i>صفارة الامتلاء</span>
-        <span className=${'alarm' + (st.buzzer ? ' on' : '')}><i></i>تنبيه الجفاف</span></div>
-      <span className="lbl">التنبيه المزدوج</span><span className="sub">${st.siren || st.buzzer ? 'يعمل الآن' : 'صامت'}</span></div>
+        <span className=${'alarm' + (st.siren ? ' on' : '')}><i></i>${tr('صفارة الامتلاء', 'Full-tank siren')}</span>
+        <span className=${'alarm' + (st.buzzer ? ' on' : '')}><i></i>${tr('تنبيه انخفاض المياه', 'Low-water alert')}</span></div>
+      <span className="lbl">${tr('التنبيه المزدوج', 'Dual alert')}</span><span className="sub">${st.siren || st.buzzer ? tr('يعمل الآن', 'active now') : tr('لا يوجد تنبيه', 'no alert')}</span></div>
   </div>`;
 }
 
 function Chart({z, i, set}){
-  const W = 560, H = 210, L = 40, R = 12, Tp = 14, B = 28, lo = 10, hi = 90;
-  const X = k => L + (W - L - R) * k / (z.hist.length - 1);
+  const W = 560, H = 210, Lx = 40, R = 12, Tp = 14, B = 28, lo = 10, hi = 90;
+  const X = k => Lx + (W - Lx - R) * k / (z.hist.length - 1);
   const Y = v => Tp + (H - Tp - B) * (1 - (Math.max(lo, Math.min(hi, v)) - lo) / (hi - lo));
   const pts = z.hist.map((v, k) => `${X(k)},${Y(v)}`).join(' ');
-  return html`<svg viewBox=${`0 0 ${W} ${H}`} role="img" aria-label=${'رطوبة ' + z.name + ' آخر ٦ ساعات'}>
-    <rect x=${L} y=${Y(hi)} width=${W - L - R} height=${Y(LED_WET) - Y(hi)} fill="var(--water-soft)"/>
-    <rect x=${L} y=${Y(LED_WET)} width=${W - L - R} height=${Y(LED_DRY) - Y(LED_WET)} fill="var(--green-soft)"/>
-    <rect x=${L} y=${Y(LED_DRY)} width=${W - L - R} height=${Y(lo) - Y(LED_DRY)} fill="var(--crit-soft)"/>
-    ${[10,30,50,70,90].map(t => html`<g key=${t}><line x1=${L} x2=${W - R} y1=${Y(t)} y2=${Y(t)} stroke="var(--line)"/><text x=${L - 8} y=${Y(t) + 4} textAnchor="end" fontSize="12" fill="var(--muted)">${P(t)}</text></g>`)}
-    <text x=${W - R - 6} y=${Y(80) + 5} textAnchor="end" fontSize="12" fontWeight="700" fill="var(--water)">مشبعة</text>
-    <text x=${W - R - 6} y=${Y(50) + 5} textAnchor="end" fontSize="12" fontWeight="700" fill="var(--green)">مثالية</text>
-    <text x=${W - R - 6} y=${Y(20) + 5} textAnchor="end" fontSize="12" fontWeight="700" fill="var(--crit)">جافة</text>
-    <line x1=${L} x2=${W - R} y1=${Y(set.stop[i])} y2=${Y(set.stop[i])} stroke="var(--green)" strokeDasharray="6 4" strokeWidth="1.5"/>
+  return html`<svg viewBox=${`0 0 ${W} ${H}`} role="img" aria-label=${tr(`رطوبة ${zn(z)} آخر ٦ ساعات`, `${zn(z)} moisture, last 6 hours`)}>
+    <rect x=${Lx} y=${Y(hi)} width=${W - Lx - R} height=${Y(LED_WET) - Y(hi)} fill="var(--water-soft)"/>
+    <rect x=${Lx} y=${Y(LED_WET)} width=${W - Lx - R} height=${Y(LED_DRY) - Y(LED_WET)} fill="var(--green-soft)"/>
+    <rect x=${Lx} y=${Y(LED_DRY)} width=${W - Lx - R} height=${Y(lo) - Y(LED_DRY)} fill="var(--crit-soft)"/>
+    ${[10,30,50,70,90].map(t => html`<g key=${t}><line x1=${Lx} x2=${W - R} y1=${Y(t)} y2=${Y(t)} stroke="var(--line)"/><text x=${Lx - 8} y=${Y(t) + 4} textAnchor="end" fontSize="12" fill="var(--muted)">${P(t)}</text></g>`)}
+    <text x=${W - R - 6} y=${Y(80) + 5} textAnchor="end" fontSize="12" fontWeight="700" fill="var(--water)">${tr('مشبعة', 'Saturated')}</text>
+    <text x=${W - R - 6} y=${Y(50) + 5} textAnchor="end" fontSize="12" fontWeight="700" fill="var(--green)">${tr('مثالية', 'Ideal')}</text>
+    <text x=${W - R - 6} y=${Y(20) + 5} textAnchor="end" fontSize="12" fontWeight="700" fill="var(--crit)">${tr('جافة', 'Dry')}</text>
+    <line x1=${Lx} x2=${W - R} y1=${Y(set.stop[i])} y2=${Y(set.stop[i])} stroke="var(--green)" strokeDasharray="6 4" strokeWidth="1.5"/>
     <polyline points=${pts} fill="none" stroke="var(--ink)" strokeWidth="3" strokeLinejoin="round"/>
     <circle cx=${X(z.hist.length - 1)} cy=${Y(z.hist[z.hist.length - 1])} r="6" fill="var(--ink)" stroke="var(--surface)" strokeWidth="2.5"/>
-    ${[[0, 'قبل ٦ س', 'start'], [18, 'قبل ٣ س', 'middle'], [35, 'الآن', 'end']].map(([k, t, a]) => html`<text key=${k} x=${X(k)} y=${H - 6} textAnchor=${a} fontSize="12" fill="var(--muted)">${t}</text>`)}
+    ${[[0, tr('قبل ٦ س', '6 h ago'), 'start'], [18, tr('قبل ٣ س', '3 h ago'), 'middle'], [35, tr('الآن', 'now'), 'end']].map(([k, t, a]) => html`<text key=${k} x=${X(k)} y=${H - 6} textAnchor=${a} fontSize="12" fill="var(--muted)">${t}</text>`)}
   </svg>`;
 }
 function zoneStatus(z){
-  if(z.valve) return ['تُروى الآن', 'p-water'];
-  if(z.want) return ['جافة · المضخة ممنوعة', 'p-crit'];
-  return ['لا تحتاج ريًّا', 'p-ok'];
+  if(z.valve) return [tr('تُروى الآن', 'Irrigating now'), 'p-water'];
+  if(z.want) return [tr('جافة · المضخة ممنوعة', 'Dry · pump blocked'), 'p-crit'];
+  return [tr('لا تحتاج ريًّا', 'No irrigation needed'), 'p-ok'];
 }
-const PR = {high:['عاجل', 'p-crit'], mid:['مهم', 'p-warn'], low:['للعلم', 'p-water']};
-const STS = [['new', 'جديد'], ['reviewed', 'تمت المراجعة'], ['resolved', 'تم الحل']];
+const PR = {high:[['عاجل', 'Urgent'], 'p-crit'], mid:[['مهم', 'Important'], 'p-warn'], low:[['للعلم', 'FYI'], 'p-water']};
+const STS = [['new', ['جديد', 'New']], ['reviewed', ['تمت المراجعة', 'Reviewed']], ['resolved', ['تم الحل', 'Resolved']]];
 function ZoneDetail({st, set, sel, onSet, onClose}){
   const ref = useRef(null);
   useEffect(() => { if(sel !== null && ref.current) try{ ref.current.scrollIntoView({behavior:'smooth', block:'nearest'}); }catch(_){} }, [sel]);
-  if(sel === null) return html`<p className="hint-line">اضغط على أي منطقة في الرسم لفتح تفاصيلها، أو اسحبها لأعلى وأسفل لتغيير رطوبتها.</p>`;
-  const z = st.zones[sel], L = ledOf(z.m), [l, c] = zoneStatus(z);
+  if(sel === null) return html`<p className="hint-line">${tr('اضغط على أي منطقة في الرسم لفتح تفاصيلها، أو اسحبها لأعلى وأسفل لتغيير رطوبتها.', 'Tap any zone in the drawing to open its details, or drag it up and down to change its moisture.')}</p>`;
+  const z = st.zones[sel], Ld = ledOf(z.m), [l, c] = zoneStatus(z);
   const upd = val => { const nx = {...set, stop:[...set.stop]}; nx.stop[sel] = val; onSet(nx); };
   return html`<section className="card zdetail" ref=${ref}>
-    <div className="sec-title"><h2>${z.name}</h2><span className=${'led ' + L}><i></i>${LED_TXT[L]}</span><span className=${'pill ' + c}>${l}</span>
-      <button className="btn x" onClick=${onClose} aria-label="إغلاق التفاصيل">إغلاق</button></div>
+    <div className="sec-title"><h2>${zn(z)}</h2><span className=${'led ' + Ld}><i></i>${ledTxt(Ld)}</span><span className=${'pill ' + c}>${l}</span>
+      <button className="btn x" onClick=${onClose} aria-label=${tr('إغلاق التفاصيل', 'Close details')}>${tr('إغلاق', 'Close')}</button></div>
     <div className="detail">
-      <div><h3 style=${{marginBottom:8}}>الرطوبة خلال آخر ٦ ساعات</h3><${Chart} z=${z} i=${sel} set=${set}/></div>
+      <div><h3 style=${{marginBottom:8}}>${tr('الرطوبة خلال آخر ٦ ساعات', 'Moisture over the last 6 hours')}</h3><${Chart} z=${z} i=${sel} set=${set}/></div>
       <div style=${{display:'flex', flexDirection:'column', gap:14}}>
-        <div><h3 style=${{marginBottom:8}}>ألوان مؤشر LED</h3>
-          <div className="ledtable"><div><span className="led dry"><i></i>أحمر</span><br/>جافة<br/><b>أقل من ٣٠٪</b></div>
-            <div><span className="led ok"><i></i>أخضر</span><br/>مثالية<br/><b>٣٠–٧٠٪</b></div>
-            <div><span className="led wet"><i></i>أزرق</span><br/>مشبعة<br/><b>أكثر من ٧٠٪</b></div></div></div>
-        <label className="slider" htmlFor=${'t' + sel}><span>يبدأ الري عند الأحمر، ويتوقف عند <b>${P(set.stop[sel])}</b></span>
+        <div><h3 style=${{marginBottom:8}}>${tr('ألوان مؤشر LED', 'LED indicator colours')}</h3>
+          <div className="ledtable"><div><span className="led dry"><i></i>${tr('أحمر', 'Red')}</span><br/>${tr('جافة', 'Dry')}<br/><b>${tr('أقل من ٣٠٪', 'below 30%')}</b></div>
+            <div><span className="led ok"><i></i>${tr('أخضر', 'Green')}</span><br/>${tr('مثالية', 'Ideal')}<br/><b>${tr('٣٠–٧٠٪', '30–70%')}</b></div>
+            <div><span className="led wet"><i></i>${tr('أزرق', 'Blue')}</span><br/>${tr('مشبعة', 'Saturated')}<br/><b>${tr('أكثر من ٧٠٪', 'above 70%')}</b></div></div></div>
+        <label className="slider" htmlFor=${'t' + sel}><span>${tr('يبدأ الري عند الأحمر، ويتوقف عند', 'Irrigation starts at red and stops at')} <b>${P(set.stop[sel])}</b></span>
           <input id=${'t' + sel} type="range" min="40" max="70" value=${set.stop[sel]} onChange=${e => upd(+e.target.value)}/></label>
       </div>
     </div>
@@ -1253,40 +1277,40 @@ function ZoneDetail({st, set, sel, onSet, onClose}){
 
 function Alerts({st, onStatus}){
   return html`<section className="card">
-    <div className="sec-title"><div className="ic" style=${{background:'var(--crit-soft)', color:'var(--crit)'}}><${Icon} d=${I.bell}/></div><h2>التنبيهات</h2>
-      <p>كل تنبيه يقول ماذا حدث وماذا تفعل. اضغط «لماذا؟» لرؤية القراءات والأسباب المحتملة.</p></div>
-    ${st.alerts.length === 0 ? html`<div className="empty">لا توجد تنبيهات حاليًا. اختر موقفًا آخر من الأعلى.</div>` : html`<div className="alerts">
+    <div className="sec-title"><div className="ic" style=${{background:'var(--crit-soft)', color:'var(--crit)'}}><${Icon} d=${I.bell}/></div><h2>${tr('التنبيهات', 'Alerts')}</h2>
+      <p>${tr('كل تنبيه يقول ماذا حدث وماذا تفعل. اضغط «لماذا؟» لرؤية القراءات والأسباب المحتملة.', 'Each alert says what happened and what to do. Tap “Why?” to see the readings and possible causes.')}</p></div>
+    ${st.alerts.length === 0 ? html`<div className="empty">${tr('لا توجد تنبيهات حاليًا. اختر موقفًا آخر من الأعلى.', 'No alerts right now. Choose another scenario above.')}</div>` : html`<div className="alerts">
       ${st.alerts.map(a => html`<article key=${a.id} className=${'alert ' + a.pr + (a.status === 'resolved' ? ' done' : '')}>
-        <div className="alert-row"><span className="num small muted">${clockStr(a.time)}</span><strong>${a.title}</strong><span className=${'pill ' + PR[a.pr][1]}>${PR[a.pr][0]}</span>
-          ${a.who === 'rule' ? null : html`<span className="tag-add">تطوير مقترح</span>`}
-          <div className="seg" role="group" aria-label="حالة التنبيه">${STS.map(([k, l]) => html`<button key=${k} aria-pressed=${a.status === k} onClick=${() => onStatus(a.id, k)}>${l}</button>`)}</div></div>
-        <p className="kv"><b>ماذا تفعل: </b>${a.action}${a.active ? '' : html` <span className="muted">(زالت الحالة)</span>`}</p>
-        <details><summary>لماذا؟</summary>
-          <p className="kv"><b>ما رُصد: </b>${a.obs}</p>
-          <div className="kv"><b>أسباب محتملة تحتاج إلى فحص:</b><ul>${a.causes.map(c => html`<li key=${c}>${c}</li>`)}</ul></div></details>
+        <div className="alert-row"><span className="num small muted">${clockStr(a.time)}</span><strong>${L(a.title)}</strong><span className=${'pill ' + PR[a.pr][1]}>${T(PR[a.pr][0])}</span>
+          ${a.who === 'rule' ? null : html`<span className="tag-add">${tr('تطوير مقترح', 'Proposed extension')}</span>`}
+          <div className="seg" role="group" aria-label=${tr('حالة التنبيه', 'Alert status')}>${STS.map(([k, l]) => html`<button key=${k} aria-pressed=${a.status === k} onClick=${() => onStatus(a.id, k)}>${T(l)}</button>`)}</div></div>
+        <p className="kv"><b>${tr('ماذا تفعل: ', 'What to do: ')}</b>${L(a.action)}${a.active ? '' : html` <span className="muted">${tr('(زالت الحالة)', '(condition cleared)')}</span>`}</p>
+        <details><summary>${tr('لماذا؟', 'Why?')}</summary>
+          <p className="kv"><b>${tr('ما رُصد: ', 'Observed: ')}</b>${L(a.obs)}</p>
+          <div className="kv"><b>${tr('أسباب محتملة تحتاج إلى فحص:', 'Possible causes to inspect:')}</b><ul>${L(a.causes).map(c => html`<li key=${c}>${c}</li>`)}</ul></div></details>
       </article>`)}</div>`}
   </section>`;
 }
 
 function Log({st}){
-  const W = {rule:['النظام', 'who-rule'], ai:['الذكاء الاصطناعي', 'who-ai'], you:['المحاكي', 'who-you']};
+  const W = {rule:[['النظام', 'System'], 'who-rule'], ai:[['الذكاء الاصطناعي', 'AI'], 'who-ai'], you:[['المحاكي', 'Simulator'], 'who-you']};
   return html`<section className="card">
-    <div className="sec-title"><div className="ic" style=${{background:'var(--green-soft)', color:'var(--green)'}}><${Icon} d=${I.chip}/></div><h2>سجل الأحداث</h2>
-      <p>كل قرار يظهر لحظة حدوثه، مع الجهة التي اتخذته.</p></div>
-    <div className="log" aria-live="polite">${st.log.map(l => html`<div key=${l.id + l.m} className="log-item"><time className="num">${clockStr(l.t)}</time><span><b className=${W[l.w][1]}>${W[l.w][0]}: </b>${l.m}</span></div>`)}</div>
+    <div className="sec-title"><div className="ic" style=${{background:'var(--green-soft)', color:'var(--green)'}}><${Icon} d=${I.chip}/></div><h2>${tr('سجل الأحداث', 'Event log')}</h2>
+      <p>${tr('كل قرار يظهر لحظة حدوثه، مع الجهة التي اتخذته.', 'Each decision appears as it happens, with who made it.')}</p></div>
+    <div className="log" aria-live="polite">${st.log.map(l => html`<div key=${l.id} className="log-item"><time className="num">${clockStr(l.t)}</time><span><b className=${W[l.w][1]}>${T(W[l.w][0])}: </b>${L(l.m)}</span></div>`)}</div>
   </section>`;
 }
 
 function AIPanel({st, set}){
   const ps = predictions(st, set);
   return html`<section className="card">
-    <div className="sec-title"><div className="ic" style=${{background:'var(--water-soft)', color:'var(--water)'}}><${Icon} d=${I.spark}/></div><h2>التوقعات وترتيب الأعطال</h2><span className="sim-tag">محاكاة تعليمية</span>
-      <p>تقرأ بيانات النظام المنفَّذ نفسها، وتتوقّع وترتّب وتشرح. لا تشغّل المضخة ولا توقفها، ولا تتجاوز قواعد الحماية.</p></div>
-    ${ps.map((p, k) => html`<article key=${k + p.title} className=${'pred ' + p.tone}><h3>${p.title}</h3><p>${p.text}</p>
-      <details><summary>لماذا ظهرت هذه التوصية؟</summary><div className="why">
+    <div className="sec-title"><div className="ic" style=${{background:'var(--water-soft)', color:'var(--water)'}}><${Icon} d=${I.spark}/></div><h2>${tr('التوقعات وترتيب الأعطال', 'Forecasts and fault ranking')}</h2><span className="sim-tag">${tr('محاكاة تعليمية', 'Educational simulation')}</span>
+      <p>${tr('تقرأ بيانات النظام المنفَّذ نفسها، وتتوقّع وترتّب وتشرح. لا تشغّل المضخة ولا توقفها، ولا تتجاوز قواعد الحماية.', 'Reads the implemented system’s own data to forecast, rank and explain. It never starts or stops the pump, and never overrides the protection rules.')}</p></div>
+    ${ps.map((p, k) => html`<article key=${k} className=${'pred ' + p.tone}><h3>${p.title}</h3><p>${p.text}</p>
+      <details><summary>${tr('لماذا ظهرت هذه التوصية؟', 'Why this recommendation?')}</summary><div className="why">
         ${p.why.map(([a, b, s]) => html`<div key=${a}><span>${a}: <b className="num">${b}</b></span><span className="src">${s}</span></div>`)}
         ${p.how && html`<span className="muted">${p.how}</span>`}</div></details></article>`)}
-    <p className="tip">لا نعرض نسبة ثقة لأن النموذج لم يُدرَّب ويُختبر على بيانات حقيقية بعد.</p>
+    <p className="tip">${tr('لا نعرض نسبة ثقة لأن النموذج لم يُدرَّب ويُختبر على بيانات حقيقية بعد.', 'No confidence score is shown because the model has not yet been trained and tested on real data.')}</p>
   </section>`;
 }
 function Assistant({chat, onAsk, busy}){
@@ -1294,123 +1318,133 @@ function Assistant({chat, onAsk, busy}){
   const live = !!AI_ENDPOINT;
   const send = e => { e.preventDefault(); const v = q.trim(); if(!v || busy) return; onAsk({id:null, q:v}); setQ(''); };
   useEffect(() => { if(ref.current) ref.current.scrollTop = ref.current.scrollHeight; }, [chat.length]);
+  const src = m => m.src === 'ai' ? tr('رد من نموذج Claude', 'Reply from Claude') : m.src === 'fallback' ? tr('رد محاكاة (تعذّر الاتصال بالخادم)', 'Simulated reply (server unreachable)') : tr('رد محاكاة', 'Simulated reply');
   return html`<section className="card">
-    <div className="sec-title"><div className="ic" style=${{background:'var(--water-soft)', color:'var(--water)'}}><${Icon} d=${I.chat}/></div><h2>اسأل مساعد الري</h2>
-      ${live ? html`<span className="tag-add">متصل بـ Claude</span>` : html`<span className="sim-tag">ردود محاكاة</span>`}
-      <p>${live ? 'يرسل المساعد القراءات الحالية مع سؤالك إلى نموذج Claude، ويشرح الحالة بكلام بسيط. إن تعذّر الاتصال يستخدم الردود المبرمجة.' : 'يشرح الحالة بكلام بسيط. الردود مكتوبة مسبقًا وتتغيّر حسب القراءات الحالية.'}</p></div>
+    <div className="sec-title"><div className="ic" style=${{background:'var(--water-soft)', color:'var(--water)'}}><${Icon} d=${I.chat}/></div><h2>${tr('اسأل مساعد الري', 'Ask the Irrigation Assistant')}</h2>
+      ${live ? html`<span className="tag-add">${tr('متصل بـ Claude', 'Connected to Claude')}</span>` : html`<span className="sim-tag">${tr('ردود محاكاة', 'Simulated replies')}</span>`}
+      <p>${live ? tr('يرسل المساعد القراءات الحالية مع سؤالك إلى نموذج Claude، ويشرح الحالة بكلام بسيط. إن تعذّر الاتصال يستخدم الردود المبرمجة.', 'The assistant sends the current readings with your question to Claude and explains the situation simply. If the connection fails, it uses the scripted replies.') : tr('يشرح الحالة بكلام بسيط. الردود مكتوبة مسبقًا وتتغيّر حسب القراءات الحالية.', 'Explains the situation in simple words. Replies are pre-written and change with the current readings.')}</p></div>
     <div className="chatwrap">
-      <div className="qs">${QUESTIONS.map(x => html`<button key=${x.id} className="q" disabled=${busy} onClick=${() => onAsk(x)}>${x.q}</button>`)}
-        ${live && html`<form className="askf" onSubmit=${send}><input id="ai-q" value=${q} onInput=${e => setQ(e.target.value)} maxLength="300" placeholder="اكتب سؤالك عن حالة المزرعة"/><button className="btn go" disabled=${busy || !q.trim()}>إرسال</button></form>`}</div>
-      <div className="chat" ref=${ref} aria-live="polite">${chat.length === 0 ? html`<div className="empty">اختر سؤالًا. الرد يتغيّر حسب حالة النظام لحظة السؤال.</div>` :
-        chat.map((m, k) => html`<div key=${k} className=${'msg ' + m.who + (m.pending ? ' pending' : '')}>${m.text}${m.who === 'bot' && !m.pending && html`<span className="meta">${m.src === 'ai' ? 'رد من نموذج Claude' : m.src === 'fallback' ? 'رد محاكاة (تعذّر الاتصال بالخادم)' : 'رد محاكاة'} · ${clockStr(m.t)}</span>`}</div>`)}</div>
+      <div className="qs">${QUESTIONS.map(x => html`<button key=${x.id} className="q" disabled=${busy} onClick=${() => onAsk(x)}>${T(x.q)}</button>`)}
+        ${live && html`<form className="askf" onSubmit=${send}><input id="ai-q" value=${q} onInput=${e => setQ(e.target.value)} maxLength="300" placeholder=${tr('اكتب سؤالك عن حالة المزرعة', 'Type your question about the farm')}/><button className="btn go" disabled=${busy || !q.trim()}>${tr('إرسال', 'Send')}</button></form>`}</div>
+      <div className="chat" ref=${ref} aria-live="polite">${chat.length === 0 ? html`<div className="empty">${tr('اختر سؤالًا. الرد يتغيّر حسب حالة النظام لحظة السؤال.', 'Pick a question. The reply depends on the system state at that moment.')}</div>` :
+        chat.map((m, k) => html`<div key=${k} className=${'msg ' + m.who + (m.pending ? ' pending' : '')}>${m.pending ? tr('يفكّر المساعد…', 'The assistant is thinking…') : L(T(m.text))}${m.who === 'bot' && !m.pending && html`<span className="meta">${src(m)} · ${clockStr(m.t)}</span>`}</div>`)}</div>
     </div>
   </section>`;
 }
 function Journey(){
-  const built = [[I.sensor, 'الحساسات', 'رطوبة سعوية لكل منطقة، وحساسات تدفق YF-S201، وحساس مسافة في الخزان.'],
-    [I.chip, 'صندوق التحكم', 'Arduino Uno في صندوق معزول IP66 ينفّذ القواعد.'],
-    [I.pump, 'التنفيذ', 'المضخة الغاطسة والصمامات والرشاشات.'],
-    [I.bell, 'التنبيه', 'مؤشرات LED، وصفارة الامتلاء، وتنبيه الجفاف.']];
-  const added = [[I.wifi, 'وحدة اتصال', 'مثل ESP32 عبر Wi-Fi أو LoRa، لأن Uno لا يتصل وحده.'],
-    [I.db, 'تخزين البيانات', 'قاعدة بيانات تحفظ كل قراءة مع وقتها.'],
-    [I.spark, 'التحليل', 'نموذج يُدرَّب على أسابيع من البيانات ويُختبر قبل الاعتماد عليه.'],
-    [I.screen, 'لوحة المشرف', 'تعرض الحالة والتوقعات وتشرحها.']];
+  const built = [[I.sensor, tr('الحساسات', 'Sensors'), tr('رطوبة سعوية لكل منطقة، وحساسات تدفق YF-S201، وحساس مسافة في الخزان.', 'A capacitive moisture sensor per zone, YF-S201 flow sensors, and a distance sensor in the tank.')],
+    [I.chip, tr('صندوق التحكم', 'Control box'), tr('Arduino Uno في صندوق معزول ينفّذ القواعد.', 'An Arduino Uno in an enclosed box runs the rules.')],
+    [I.pump, tr('التنفيذ', 'Actuation'), tr('المضخة الغاطسة والصمامات والرشاشات.', 'Submersible pump, valves and sprinklers.')],
+    [I.bell, tr('التنبيه', 'Alerts'), tr('مؤشرات LED، وصفارة الامتلاء، وتنبيه انخفاض مستوى المياه.', 'LED indicators, the full-tank siren and the low water-level alert.')]];
+  const added = [[I.wifi, tr('وحدة اتصال', 'Communication module'), tr('مثل ESP32 عبر Wi-Fi أو LoRa، لأن Uno لا يتصل وحده.', 'Such as an ESP32 over Wi-Fi, or LoRa, since the Uno has no wireless link.')],
+    [I.db, tr('تخزين البيانات', 'Data storage'), tr('قاعدة بيانات تحفظ كل قراءة مع وقتها.', 'A database that stores every reading with its timestamp.')],
+    [I.spark, tr('التحليل', 'Analysis'), tr('نموذج يُدرَّب على أسابيع من البيانات ويُختبر قبل الاعتماد عليه.', 'A model trained on weeks of data and tested before it is relied on.')],
+    [I.screen, tr('لوحة المشرف', 'Supervisor dashboard'), tr('تعرض الحالة والتوقعات وتشرحها.', 'Shows the status and forecasts and explains them.')]];
   const row = (arr, add) => html`<div className="journey">${arr.map(([ic, t, d]) => html`<div key=${t} className=${'stop' + (add ? ' add' : '')}><div className="ic"><${Icon} d=${ic} s=${24}/></div><h3>${t}</h3><p>${d}</p></div>`)}</div>`;
   return html`<section className="card">
-    <div className="sec-title"><div className="ic" style=${{background:'var(--water-soft)', color:'var(--water)'}}><${Icon} d=${I.wifi}/></div><h2>كيف سيعمل النظام فعليًا؟</h2>
-      <p>النظام المنفَّذ يعمل وحده، والتطوير المقترح يبني عليه.</p></div>
-    <p className="row-label"><span className="tag-stu">النظام المنفَّذ</span> يعمل الآن محليًا</p>${row(built)}
-    <p className="row-label" style=${{marginTop:14}}><span className="tag-add">تطوير مقترح</span> يحتاج مكونات وبيانات إضافية</p>${row(added, 1)}
+    <div className="sec-title"><div className="ic" style=${{background:'var(--water-soft)', color:'var(--water)'}}><${Icon} d=${I.wifi}/></div><h2>${tr('كيف سيعمل النظام فعليًا؟', 'How will the system work in practice?')}</h2>
+      <p>${tr('النظام المنفَّذ يعمل وحده، والتطوير المقترح يبني عليه.', 'The implemented system works on its own; the proposed extension builds on it.')}</p></div>
+    <p className="row-label"><span className="tag-stu">${tr('النظام المنفَّذ', 'Implemented system')}</span> ${tr('يعمل الآن محليًا', 'runs locally now')}</p>${row(built)}
+    <p className="row-label" style=${{marginTop:14}}><span className="tag-add">${tr('تطوير مقترح', 'Proposed extension')}</span> ${tr('يحتاج مكونات وبيانات إضافية', 'needs extra components and data')}</p>${row(added, 1)}
   </section>`;
 }
 function Facts(){
   return html`<section className="card facts">
-    <div><h3><span style=${{color:'var(--green)'}}><${Icon} d=${I.doc}/></span>نتائج المشروع</h3><ul>
-      <li>ترشيد استهلاك المياه بنسبة ٤١٫٦٪.</li><li>رصد انسداد الأنابيب خلال ١٫٨ ثانية.</li><li>صفر حوادث فيضان للخزانات.</li></ul>
-      <p className="tip">نتائج قياسات المشروع على النموذج الفعلي. هذه الشاشة توضّح طريقة عمل النظام ولا تقيس هذه النتائج.</p></div>
-    <div><h3><span style=${{color:'var(--warn)'}}><${Icon} d=${I.alert}/></span>ما الذي تحاكيه هذه الشاشة؟</h3><ul>
-      <li>كل القراءات يولّدها البرنامج، وليست من حساسات حقيقية.</li>
-      <li>الحرارة والاستهلاك المعتاد إعدادات، لا قراءات.</li>
-      <li>التوقعات معادلات بسيطة، وليست نموذجًا مدرَّبًا.</li></ul></div>
-    <div><h3><span style=${{color:'var(--water)'}}><${Icon} d=${I.check}/></span>حدود النظام الحالي</h3><ul>
-      <li>لا يقيس الملوحة؛ يحتاج ذلك حساس EC.</li>
-      <li>لا يوقف الصهريج؛ ينبّه السائق فقط.</li>
-      <li>ضعف التدفق علامة للفحص، والسبب يُؤكَّد بالفحص.</li></ul></div>
+    <div><h3><span style=${{color:'var(--green)'}}><${Icon} d=${I.doc}/></span>${tr('نتائج المشروع', 'Project results')}</h3><ul>
+      <li>${tr('ترشيد استهلاك المياه بنسبة ٤١٫٦٪.', 'Water consumption reduced by 41.6%.')}</li><li>${tr('رصد انسداد الأنابيب خلال ١٫٨ ثانية.', 'Pipe blockage detected within 1.8 seconds.')}</li><li>${tr('صفر حوادث فيضان للخزانات.', 'Zero tank overflow incidents.')}</li></ul>
+      <p className="tip">${tr('نتائج قياسات المشروع على النموذج الفعلي. هذه الشاشة توضّح طريقة عمل النظام ولا تقيس هذه النتائج.', 'Results measured on the physical prototype. This screen illustrates how the system works and does not measure these results.')}</p></div>
+    <div><h3><span style=${{color:'var(--warn)'}}><${Icon} d=${I.alert}/></span>${tr('ما الذي تحاكيه هذه الشاشة؟', 'What does this screen simulate?')}</h3><ul>
+      <li>${tr('كل القراءات يولّدها البرنامج، وليست من حساسات حقيقية.', 'All readings are generated by the program, not by real sensors.')}</li>
+      <li>${tr('الحرارة والاستهلاك المعتاد إعدادات، لا قراءات.', 'Temperature and usual consumption are settings, not readings.')}</li>
+      <li>${tr('التوقعات معادلات بسيطة، وليست نموذجًا مدرَّبًا.', 'Forecasts are simple formulas, not a trained model.')}</li></ul></div>
+    <div><h3><span style=${{color:'var(--water)'}}><${Icon} d=${I.check}/></span>${tr('حدود النظام الحالي', 'Current system limits')}</h3><ul>
+      <li>${tr('لا يقيس الملوحة؛ يحتاج ذلك حساس EC.', 'It does not measure salinity; that needs an EC sensor.')}</li>
+      <li>${tr('لا يوقف الصهريج؛ ينبّه السائق فقط.', 'It does not stop the tanker; it only alerts the driver.')}</li>
+      <li>${tr('ضعف التدفق علامة للفحص، والسبب يُؤكَّد بالفحص.', 'Low flow is a sign to inspect; only inspection confirms the cause.')}</li></ul></div>
   </section>`;
 }
 
 function Timeline({clock, onJump}){
-  const t = ((clock % 1440) + 1440) % 1440, p = t / 1440 * 100, ref = useRef(null);
-  const click = e => { const r = ref.current.getBoundingClientRect(); const f = Math.max(0, Math.min(1, (r.right - e.clientX) / r.width)); onJump(Math.round(f * 144) * 10); };
+  const t = ((clock % 1440) + 1440) % 1440, p = t / 1440 * 100, ref = useRef(null), en = LANG === 'en';
+  const click = e => { const r = ref.current.getBoundingClientRect(); const f = Math.max(0, Math.min(1, (en ? e.clientX - r.left : r.right - e.clientX) / r.width)); onJump(Math.round(f * 144) * 10); };
+  const marks = [[0, tr('١٢ منتصف الليل', '12 midnight')], [6, tr('٦ صباحًا', '6 AM')], [12, tr('١٢ ظهرًا', '12 noon')], [18, tr('٦ مساءً', '6 PM')], [24, tr('١٢ منتصف الليل', '12 midnight')]];
   return html`<div className="tl">
     <div className="tl-track" ref=${ref} onClick=${click} tabIndex="0" role="slider" aria-valuemin="0" aria-valuemax="24" aria-valuenow=${Math.floor(t / 60)}
-      aria-label="الوقت خلال اليوم. اضغط على ساعة لاحقة للتقديم إليها" onKeyDown=${e => { if(e.key === 'ArrowLeft' || e.key === 'ArrowUp'){ e.preventDefault(); onJump(t + 60); } }}>
+      aria-label=${tr('الوقت خلال اليوم. اضغط على ساعة لاحقة للتقديم إليها', 'Time of day. Tap a later hour to jump to it')} onKeyDown=${e => { if(e.key === (en ? 'ArrowRight' : 'ArrowLeft') || e.key === 'ArrowUp'){ e.preventDefault(); onJump(t + 60); } }}>
       <div className="tl-fill" style=${{width:p + '%'}}></div>
-      ${[3,6,9,12,15,18,21].map(h => html`<span key=${h} className="tl-tick" style=${{right:h / 24 * 100 + '%'}}></span>`)}
-      <div className="tl-now" style=${{right:p + '%'}}><span>${clockStr(t)}</span></div>
+      ${[3,6,9,12,15,18,21].map(h => html`<span key=${h} className="tl-tick" style=${{insetInlineStart:h / 24 * 100 + '%'}}></span>`)}
+      <div className="tl-now" style=${{insetInlineStart:p + '%'}}><span>${clockStr(t)}</span></div>
     </div>
-    <div className="tl-labels">${[[0, '١٢ منتصف الليل'], [6, '٦ صباحًا'], [12, '١٢ ظهرًا'], [18, '٦ مساءً'], [24, '١٢ منتصف الليل']].map(([h, l]) => html`<span key=${h} style=${{right:h / 24 * 100 + '%'}}>${l}</span>`)}</div>
+    <div className="tl-labels">${marks.map(([h, l]) => html`<span key=${h} style=${{insetInlineStart:h / 24 * 100 + '%'}}>${l}</span>`)}</div>
   </div>`;
 }
 
 const HYPS = [
-  {h:'الري حسب رطوبة التربة يستهلك ماءً أقل من الري بجدول زمني ثابت، مع بقاء التربة في النطاق المثالي (٣٠–٧٠٪).',
-   h0:'لا يوجد فرق في استهلاك الماء بين الطريقتين.',
-   test:'حوضان متماثلان لعدة أيام: الأول يُروى بالنظام، والثاني بمؤقت ثابت.',
-   measure:'اللترات من حساس التدفق، ونسبة الوقت الذي يبقى فيه المؤشر أخضر.',
-   demos:[['شاهد الري حسب الحاجة', 'normal', null]],
-   see:'المضخة لا تعمل إلا حين يصير مؤشر منطقة أحمر، وتتوقف عند حد التوقف. اسحب حقلًا للأسفل لترى ذلك.'},
-  {h:'مقارنة قراءات حساسات التدفق بين الخطوط تميّز انسداد خط واحد عن انسداد الفلتر الرئيسي.',
-   h0:'لا يستطيع النظام التمييز بين الحالتين.',
-   test:'سد صمام خط واحد جزئيًا، ثم تجربة منفصلة بفلتر متّسخ، مع تكرار كل حالة عدة مرات.',
-   measure:'عدد المرات التي حدّد فيها النظام المكان الصحيح، والزمن حتى ظهور التنبيه.',
-   demos:[['انسداد في خط واحد', 'lowflow', null], ['فلتر رئيسي متّسخ', 'lowflow', s => ({...s, line:[1,1,1], ff:0.5})]],
-   see:'قارن جملة الحالة في الموقفين: «خط المنطقة ٢ فقط» مقابل «كل الخطوط».'},
-  {h:'قاعدة حد الخزان تمنع تشغيل المضخة دون ماء في كل المحاولات.',
-   h0:'تعمل المضخة أحيانًا رغم انخفاض الخزان تحت الحد.',
-   test:'تفريغ الخزان تدريجيًا وتكرار التجربة عدة مرات.',
-   measure:'هل توقفت المضخة عند ١٥٪ في كل مرة؟ وهل عمل تنبيه الجفاف؟',
-   demos:[['الخزان ينفد', 'lowtank', null]],
-   see:'اضغط «تقديم ساعة» وراقب المضخة تتوقف وتنبيه الجفاف يعمل عند حد الحماية.'},
-  {h:'صفارة الامتلاء تنطلق قبل فيضان الخزان بوقت يكفي السائق لإغلاق المحبس.',
-   h0:'لا تترك الصفارة وقتًا كافيًا قبل الفيضان.',
-   test:'تعبئة بمعدل معروف حتى تنطلق الصفارة، مع تكرار التجربة.',
-   measure:'الدقائق بين انطلاق الصفارة والامتلاء الكامل.',
-   demos:[['الصهريج يعبّئ الخزان', 'filling', null]],
-   see:'راقب الوقت على خط الساعة بين انطلاق الصفارة ووصول الخزان إلى الامتلاء.'},
+  {h:['الري حسب رطوبة التربة يستهلك ماءً أقل من الري بجدول زمني ثابت، مع بقاء التربة في النطاق المثالي (٣٠–٧٠٪).', 'Irrigating by soil moisture uses less water than a fixed-schedule timer, while keeping the soil in the ideal range (30–70%).'],
+   h0:['لا يوجد فرق في استهلاك الماء بين الطريقتين.', 'There is no difference in water use between the two methods.'],
+   test:['حوضان متماثلان لعدة أيام: الأول يُروى بالنظام، والثاني بمؤقت ثابت.', 'Two identical beds for several days: one irrigated by the system, the other by a fixed timer.'],
+   measure:['اللترات من حساس التدفق، ونسبة الوقت الذي يبقى فيه المؤشر أخضر.', 'Litres from the flow sensor, and the share of time the indicator stays green.'],
+   demos:[[['شاهد الري حسب الحاجة', 'See on-demand irrigation'], 'normal', null]],
+   see:['المضخة لا تعمل إلا حين يصير مؤشر منطقة أحمر، وتتوقف عند حد التوقف. اسحب حقلًا للأسفل لترى ذلك.', 'The pump runs only when a zone indicator turns red, and stops at the stop threshold. Drag a field down to see it.']},
+  {h:['مقارنة قراءات حساسات التدفق بين الخطوط تميّز انسداد خط واحد عن انسداد الفلتر الرئيسي.', 'Comparing flow-sensor readings across lines distinguishes a single-line blockage from a main-filter blockage.'],
+   h0:['لا يستطيع النظام التمييز بين الحالتين.', 'The system cannot tell the two cases apart.'],
+   test:['سد صمام خط واحد جزئيًا، ثم تجربة منفصلة بفلتر متّسخ، مع تكرار كل حالة عدة مرات.', 'Partially close one line’s valve, then a separate trial with a dirty filter, repeating each case several times.'],
+   measure:['عدد المرات التي حدّد فيها النظام المكان الصحيح، والزمن حتى ظهور التنبيه.', 'How often the system located the right place, and the time until the alert appeared.'],
+   demos:[[['انسداد في خط واحد', 'Blockage in one line'], 'lowflow', null], [['فلتر رئيسي متّسخ', 'Dirty main filter'], 'lowflow', s => ({...s, line:[1,1,1], ff:0.5})]],
+   see:['قارن جملة الحالة في الموقفين: «خط المنطقة ٢ فقط» مقابل «كل الخطوط».', 'Compare the status line in both cases: “Zone 2 line only” versus “all lines”.']},
+  {h:['قاعدة حد الخزان تمنع تشغيل المضخة دون ماء في كل المحاولات.', 'The tank-limit rule prevents the pump from running dry in every trial.'],
+   h0:['تعمل المضخة أحيانًا رغم انخفاض الخزان تحت الحد.', 'The pump sometimes runs even though the tank is below the limit.'],
+   test:['تفريغ الخزان تدريجيًا وتكرار التجربة عدة مرات.', 'Drain the tank gradually and repeat the trial several times.'],
+   measure:['هل توقفت المضخة عند ١٥٪ في كل مرة؟ وهل عمل تنبيه انخفاض مستوى المياه؟', 'Did the pump stop at 15% every time? Did the low water-level alert activate?'],
+   demos:[[['الخزان ينفد', 'Tank running low'], 'lowtank', null]],
+   see:['اضغط «تقديم ساعة» وراقب المضخة تتوقف والتنبيه يعمل عند حد الحماية.', 'Press “Skip 1 hour” and watch the pump stop and the alert activate at the protection limit.']},
+  {h:['صفارة الامتلاء تنطلق قبل فيضان الخزان بوقت يكفي السائق لإغلاق المحبس.', 'The full-tank siren sounds early enough before overflow for the driver to close the valve.'],
+   h0:['لا تترك الصفارة وقتًا كافيًا قبل الفيضان.', 'The siren does not leave enough time before overflow.'],
+   test:['تعبئة بمعدل معروف حتى تنطلق الصفارة، مع تكرار التجربة.', 'Fill at a known rate until the siren sounds, repeating the trial.'],
+   measure:['الدقائق بين انطلاق الصفارة والامتلاء الكامل.', 'Minutes between the siren and the tank being completely full.'],
+   demos:[[['الصهريج يعبّئ الخزان', 'Tanker filling the tank'], 'filling', null]],
+   see:['راقب الوقت على خط الساعة بين انطلاق الصفارة ووصول الخزان إلى الامتلاء.', 'Watch the time on the timeline between the siren and the tank becoming full.']},
 ];
 function Hyps({go}){
   return html`<div className="pane">
-    <section className="card hyp-intro"><div className="sec-title"><div className="ic" style=${{background:'var(--green-soft)', color:'var(--green)'}}><${Icon} d=${I.doc}/></div><h2>فرضيات البحث</h2>
-      <p>لكل فرضية: ما نتوقعه، وعكسه (الفرضية الصفرية)، وكيف نختبره بمكونات النظام. زر «شاهدها في المحاكي» يشغّل الموقف الذي يوضّحها.</p></div></section>
+    <section className="card hyp-intro"><div className="sec-title"><div className="ic" style=${{background:'var(--green-soft)', color:'var(--green)'}}><${Icon} d=${I.doc}/></div><h2>${tr('فرضيات البحث', 'Research hypotheses')}</h2>
+      <p>${tr('لكل فرضية: ما نتوقعه، وعكسه (الفرضية الصفرية)، وكيف نختبره بمكونات النظام. زر «شاهدها في المحاكي» يشغّل الموقف الذي يوضّحها.', 'For each hypothesis: what we expect, its opposite (the null hypothesis), and how we test it with the system’s components. “See it in the simulator” runs the scenario that illustrates it.')}</p></div></section>
     <div className="hyps">${HYPS.map((x, i) => html`<article key=${i} className="card hyp">
-      <div className="hyp-head"><span className="hno">ف${ad(i + 1)}</span><h3>${x.h}</h3></div>
-      <p className="h0"><b>الفرضية الصفرية:</b> ${x.h0}</p>
-      <dl className="hdl"><dt>كيف نختبرها</dt><dd>${x.test}</dd><dt>ماذا نقيس</dt><dd>${x.measure}</dd></dl>
-      <div className="hdemo"><span className="small muted">شاهدها في المحاكي:</span>
-        ${x.demos.map(([l, k, mod]) => html`<button key=${l} className="btn go" onClick=${() => go(k, mod)}>${l}</button>`)}</div>
-      <p className="hsee">${x.see}</p>
+      <div className="hyp-head"><span className="hno">${tr('ف', 'H')}${ad(i + 1)}</span><h3>${T(x.h)}</h3></div>
+      <p className="h0"><b>${tr('الفرضية الصفرية:', 'Null hypothesis:')}</b> ${T(x.h0)}</p>
+      <dl className="hdl"><dt>${tr('كيف نختبرها', 'How we test it')}</dt><dd>${T(x.test)}</dd><dt>${tr('ماذا نقيس', 'What we measure')}</dt><dd>${T(x.measure)}</dd></dl>
+      <div className="hdemo"><span className="small muted">${tr('شاهدها في المحاكي:', 'See it in the simulator:')}</span>
+        ${x.demos.map(([l, k, mod]) => html`<button key=${k + T(l)} className="btn go" onClick=${() => go(k, mod)}>${T(l)}</button>`)}</div>
+      <p className="hsee">${T(x.see)}</p>
     </article>`)}
     <article className="card hyp future">
-      <div className="hyp-head"><span className="hno">ف${ad(5)}</span><h3>يمكن التنبؤ بموعد حاجة المنطقة إلى الري بفرق لا يتجاوز ساعة واحدة، بعد جمع بيانات أسبوعين.</h3></div>
-      <p className="h0"><span className="tag-add">تطوير مقترح</span> فرضية للعمل المستقبلي، لم تُختبر بعد. تحتاج وحدة اتصال وتخزين بيانات.</p>
-      <div className="hdemo"><button className="btn" onClick=${() => go(null, null, 'ai')}>اعرض التوقعات المحاكاة</button></div>
+      <div className="hyp-head"><span className="hno">${tr('ف', 'H')}${ad(5)}</span><h3>${tr('يمكن التنبؤ بموعد حاجة المنطقة إلى الري بفرق لا يتجاوز ساعة واحدة، بعد جمع بيانات أسبوعين.', 'After two weeks of data, the time a zone needs irrigation can be predicted within one hour.')}</h3></div>
+      <p className="h0"><span className="tag-add">${tr('تطوير مقترح', 'Proposed extension')}</span> ${tr('فرضية للعمل المستقبلي، لم تُختبر بعد. تحتاج وحدة اتصال وتخزين بيانات.', 'A hypothesis for future work, not yet tested. It needs a communication module and data storage.')}</p>
+      <div className="hdemo"><button className="btn" onClick=${() => go(null, null, 'ai')}>${tr('اعرض التوقعات المحاكاة', 'Show the simulated forecasts')}</button></div>
     </article></div>
   </div>`;
 }
 
-const TABS = [['farm', 'المزرعة الآن', I.leaf], ['alerts', 'التنبيهات', I.bell], ['hyp', 'الفرضيات', I.doc], ['ai', 'تطوير مقترح', I.spark]];
+const TABS = [['farm', ['المزرعة الآن', 'Farm now'], I.leaf], ['alerts', ['التنبيهات', 'Alerts'], I.bell], ['hyp', ['الفرضيات', 'Hypotheses'], I.doc], ['ai', ['تطوير مقترح', 'Proposed extension'], I.spark]];
+const savedLang = () => { try{ const v = localStorage.getItem('irrigation-lang'); if(v === 'en' || v === 'ar') return v; }catch(_){} return 'ar'; };
 function App(){
+  const [lang, setLang] = useState(savedLang);
+  LANG = lang;
   const [set, setSet] = useState(DEFAULT_SET);
   const [st, setSt] = useState(() => init('normal', DEFAULT_SET));
   const [running, setRunning] = useState(true);
   const [fast, setFast] = useState(false);
   const [sel, setSel] = useState(null);
   const [chat, setChat] = useState([]);
-  const [touched, setTouched] = useState(false);
   const [tab, setTab] = useState('farm');
   const setRef = useRef(set); setRef.current = set;
   const speed = fast ? 10 : 2;
+  useEffect(() => {
+    const root = document.getElementById('app'); if(root){ root.dir = lang === 'en' ? 'ltr' : 'rtl'; root.lang = lang; }
+    try{ document.documentElement.lang = lang; document.documentElement.dir = lang === 'en' ? 'ltr' : 'rtl'; }catch(_){}
+    document.title = lang === 'en' ? 'Smart Irrigation Assistant' : 'مساعد الري الذكي';
+    try{ localStorage.setItem('irrigation-lang', lang); }catch(_){}
+  }, [lang]);
   useEffect(() => { if(!running) return; const t = setInterval(() => setSt(s => tick(s, speed, setRef.current)), 1000); return () => clearInterval(t); }, [running, speed]);
   const act = fn => setSt(s => commit(s, evaluate(control(fn(s), setRef.current), setRef.current)));
   const load = k => { setSt(init(k, set)); setChat([]); };
@@ -1426,49 +1460,51 @@ function App(){
   const [busy, setBusy] = useState(false);
   const ask = async q => {
     const snap = st, t = snap.clock;
-    if(!AI_ENDPOINT){ setChat(c => [...c, {who:'me', text:q.q}, {who:'bot', text:answer(q.id, snap, set), t, src:'sim'}]); return; }
-    setBusy(true); setChat(c => [...c, {who:'me', text:q.q}, {who:'bot', text:'يفكّر المساعد…', pending:true, t}]);
+    if(!AI_ENDPOINT){ setChat(c => [...c, {who:'me', text:q.q}, {who:'bot', text:bi(() => answer(q.id, snap, set)), t, src:'sim'}]); return; }
+    setBusy(true); setChat(c => [...c, {who:'me', text:q.q}, {who:'bot', pending:true, t}]);
     let msg;
-    try{ msg = {who:'bot', text:await askAI(q.q, snap, set), t, src:'ai'}; }
-    catch(_){ msg = {who:'bot', text:q.id ? answer(q.id, snap, set) : 'تعذّر الاتصال بالمساعد الآن. جرّب أحد الأسئلة الجاهزة.', t, src:'fallback'}; }
+    try{ msg = {who:'bot', text:await askAI(T(q.q), snap, set), t, src:'ai'}; }
+    catch(_){ msg = {who:'bot', text:q.id ? bi(() => answer(q.id, snap, set)) : ['تعذّر الاتصال بالمساعد الآن. جرّب أحد الأسئلة الجاهزة.', 'Could not reach the assistant right now. Try one of the ready questions.'], t, src:'fallback'}; }
     setChat(c => [...c.slice(0, -1), msg]); setBusy(false);
   };
   const [tone, title, text] = headline(st, set);
   const fresh = st.alerts.filter(a => a.status === 'new').length;
   return html`<${React.Fragment}>
     <header className="head">
-      <div className="head-top"><span className="eyebrow">مساعد الري الذكي</span><span className="badge-sim">نموذج تصوّري — بيانات محاكاة</span></div>
-      <h1>نظام الري الذاتي الذكي لمراقبة رطوبة التربة وإدارة خزانات المزارع والحدائق</h1>
-      <div className="credits"><span>إعداد الطالب الباحث: <b>محمد دخيل الله المطيري</b></span><span>إشراف التصنيع الرقمي: <b>م. سامي بخش</b> (معمل شهم)</span>
-        <span>الإشراف العلمي والتربوي: <b>د. أحمد محمود التوني</b> (مدارس القلعة الحجازية)</span></div>
+      <div className="head-top"><span className="eyebrow">${tr('مساعد الري الذكي', 'Smart Irrigation Assistant')}</span>
+        <div className="head-tools"><span className="badge-sim">${tr('نموذج تصوّري — بيانات محاكاة', 'Concept prototype — simulated data')}</span>
+          <button className="lang-btn" onClick=${() => setLang(lang === 'en' ? 'ar' : 'en')} lang=${lang === 'en' ? 'ar' : 'en'} aria-label=${lang === 'en' ? 'التبديل إلى العربية' : 'Switch to English'}><${Icon} d=${I.globe} s=${18}/>${lang === 'en' ? 'العربية' : 'English'}</button></div></div>
+      <h1>${tr('نظام الري الذاتي الذكي لمراقبة رطوبة التربة وإدارة خزانات المزارع والحدائق', 'Smart Self-Irrigation System for Soil-Moisture Monitoring and Farm & Garden Tank Management')}</h1>
+      <div className="credits"><span>${tr('إعداد الطالب الباحث:', 'Student researcher:')} <b>${tr('محمد دخيل الله المطيري', 'Mohammed Dakhilallah Al-Mutairi')}</b></span><span>${tr('إشراف التصنيع الرقمي:', 'Digital fabrication supervisor:')} <b>${tr('م. سامي بخش', 'Eng. Sami Bakhsh')}</b> ${tr('(معمل شهم)', '(Shahm Lab)')}</span>
+        <span>${tr('الإشراف العلمي والتربوي:', 'Scientific & educational supervisor:')} <b>${tr('د. أحمد محمود التوني', 'Dr. Ahmed Mahmoud Al-Tony')}</b> ${tr('(مدارس القلعة الحجازية)', '(Al-Qalaa Al-Hijaziya Schools)')}</span></div>
     </header>
 
-    <section className="controls" aria-label="التحكم في المحاكاة">
-      <div className="chips" role="group" aria-label="اختر موقفًا">${Object.entries(SCEN).map(([k, s]) => html`<button key=${k} className="chip" aria-pressed=${st.key === k} onClick=${() => load(k)}>
-        <${Icon} d=${s.icon} s=${18}/>${s.label}</button>`)}</div>
+    <section className="controls" aria-label=${tr('التحكم في المحاكاة', 'Simulation controls')}>
+      <div className="chips" role="group" aria-label=${tr('اختر موقفًا', 'Choose a scenario')}>${Object.entries(SCEN).map(([k, s]) => html`<button key=${k} className="chip" aria-pressed=${st.key === k} onClick=${() => load(k)}>
+        <${Icon} d=${s.icon} s=${18}/>${T(s.label)}</button>`)}</div>
       <div className="ctrls">
-        <div className="speed" role="group" aria-label="سرعة المحاكاة">
-          <button aria-pressed=${!running} onClick=${() => setRunning(false)}>إيقاف</button>
-          <button aria-pressed=${running && !fast} onClick=${() => { setRunning(true); setFast(false); }}>سرعة عادية</button>
-          <button aria-pressed=${running && fast} onClick=${() => { setRunning(true); setFast(true); }}>تسريع</button>
+        <div className="speed" role="group" aria-label=${tr('سرعة المحاكاة', 'Simulation speed')}>
+          <button aria-pressed=${!running} onClick=${() => setRunning(false)}>${tr('إيقاف', 'Pause')}</button>
+          <button aria-pressed=${running && !fast} onClick=${() => { setRunning(true); setFast(false); }}>${tr('سرعة عادية', 'Normal speed')}</button>
+          <button aria-pressed=${running && fast} onClick=${() => { setRunning(true); setFast(true); }}>${tr('تسريع', 'Fast')}</button>
         </div>
-        <button className="btn" onClick=${advance}>تقديم ساعة</button>
-        ${st.filling && html`<button className="btn go" onClick=${() => act(s => ({...s, filling:false}))}>أغلق السائق المحبس</button>`}
-        ${st.lockout && html`<button className="btn stop" onClick=${() => act(s => ({...s, lockout:false, lowFlowMin:0}))}>إعادة تشغيل المضخة</button>`}
+        <button className="btn" onClick=${advance}>${tr('تقديم ساعة', 'Skip 1 hour')}</button>
+        ${st.filling && html`<button className="btn go" onClick=${() => act(s => ({...s, filling:false}))}>${tr('أغلق السائق المحبس', 'Driver closes the valve')}</button>`}
+        ${st.lockout && html`<button className="btn stop" onClick=${() => act(s => ({...s, lockout:false, lowFlowMin:0}))}>${tr('إعادة تشغيل المضخة', 'Restart the pump')}</button>`}
         <span className="spacer"></span>
-        <button className="btn" onClick=${reset}>إعادة الضبط</button>
+        <button className="btn" onClick=${reset}>${tr('إعادة الضبط', 'Reset')}</button>
       </div>
       <${Timeline} clock=${st.clock} onJump=${jump}/>
     </section>
 
-    <nav ref=${tabsRef} className="tabs" role="tablist" aria-label="أقسام العرض">${TABS.map(([k, l, ic]) => html`<button key=${k} role="tab" aria-selected=${tab === k} className=${'tab' + (k === 'ai' ? ' tab-add' : '')} onClick=${() => setTab(k)}>
-      <${Icon} d=${ic} s=${20}/>${l}${k === 'alerts' && fresh > 0 && html`<span className="count">${n0(fresh)}</span>`}</button>`)}</nav>
+    <nav ref=${tabsRef} className="tabs" role="tablist" aria-label=${tr('أقسام العرض', 'Sections')}>${TABS.map(([k, l, ic]) => html`<button key=${k} role="tab" aria-selected=${tab === k} className=${'tab' + (k === 'ai' ? ' tab-add' : '')} onClick=${() => setTab(k)}>
+      <${Icon} d=${ic} s=${20}/>${T(l)}${k === 'alerts' && fresh > 0 && html`<span className="count">${n0(fresh)}</span>`}</button>`)}</nav>
 
     ${tab === 'farm' && html`<div className="pane">
       <div className=${'banner ' + tone} role="status">
         <div className="big"><${Icon} d=${tone === 'ok' ? I.check : I.alert} s=${30}/></div>
         <div><h2>${title}</h2><p>${text}</p>
-          ${st.overflow && html`<p style=${{color:'var(--crit)', fontWeight:700}}>الخزان ممتلئ تمامًا: الماء قد يفيض.</p>`}</div>
+          ${st.overflow && html`<p style=${{color:'var(--crit)', fontWeight:700}}>${tr('الخزان ممتلئ تمامًا: الماء قد يفيض.', 'The tank is completely full: water may overflow.')}</p>`}</div>
       </div>
       <${SceneBox} st=${st} set=${set} sel=${sel} onSel=${setSel} onAct=${act}/>
       <${ForecastCard} st=${st} set=${set}/>
@@ -1484,12 +1520,12 @@ function App(){
     ${tab === 'hyp' && html`<${Hyps} go=${go}/>`}
 
     ${tab === 'ai' && html`<div className="pane addwrap">
-      <div className="part"><span className="no"><${Icon} d=${I.spark} s=${24}/></span><div><h2>تطوير مقترح: طبقة الذكاء الاصطناعي</h2>
-        <p>خطوة مستقبلية تبني على النظام المنفَّذ. تقرأ نفس البيانات، فتتوقّع وتشرح وتنصح، ولا تتحكم في المضخة.</p></div></div>
+      <div className="part"><span className="no"><${Icon} d=${I.spark} s=${24}/></span><div><h2>${tr('تطوير مقترح: طبقة الذكاء الاصطناعي', 'Proposed extension: the AI layer')}</h2>
+        <p>${tr('خطوة مستقبلية تبني على النظام المنفَّذ. تقرأ نفس البيانات، فتتوقّع وتشرح وتنصح، ولا تتحكم في المضخة.', 'A future step that builds on the implemented system. It reads the same data to forecast, explain and advise, and never controls the pump.')}</p></div></div>
       <div className="two"><${AIPanel} st=${st} set=${set}/><${Assistant} chat=${chat} onAsk=${ask} busy=${busy}/></div>
     </div>`}
 
-    <details className="about"><summary><h2>عن المشروع</h2><span className="muted small">كيف يعمل النظام فعليًا، وحدوده، ونتائجه</span></summary>
+    <details className="about"><summary><h2>${tr('عن المشروع', 'About the project')}</h2><span className="muted small">${tr('كيف يعمل النظام فعليًا، وحدوده، ونتائجه', 'How the system works in practice, its limits and results')}</span></summary>
       <div className="about-body"><${Journey}/><${Facts}/></div></details>
   <//>`;
 }
