@@ -720,12 +720,12 @@ const ledOf = m => m < LED_DRY ? 'dry' : m > LED_WET ? 'wet' : 'ok';
 const ledTxt = k => ({dry:tr('أحمر · جافة', 'Red · dry'), ok:tr('أخضر · مثالية', 'Green · ideal'), wet:tr('أزرق · مشبعة', 'Blue · saturated')})[k];
 const LED_COL = {dry:'var(--crit)', ok:'var(--green)', wet:'var(--water)'};
 const ZONES0 = [{base:0.9}, {base:1.0}, {base:0.8}];
-const DEFAULT_SET = {start:[30,30,30], stop:[60,60,60], tankMin:15, tankResume:20, tankWarn:25, tankFull:92};
+const DEFAULT_SET = {start:[30,30,30], stop:[60,60,60], tankMin:10, tankResume:15, tankWarn:20, tankFull:95};
 const SCEN = {
   normal:  {label:['يوم عادي', 'Normal day'], icon:I.leaf, tank:68, moist:[48,45,58], line:[1,1,1], ff:1, filling:false, temp:31, avgDaily:300, consumed:110, clock:9*60},
   hot:     {label:['يوم حار جدًا', 'Very hot day'], icon:I.sun, tank:64, moist:[40,36,44], line:[1,1,1], ff:1, filling:false, temp:45, avgDaily:470, consumed:190, clock:13*60},
   lowflow: {label:['انخفاض التدفق في خط', 'Low flow in one line'], icon:I.drop, tank:82, moist:[28,26,55], line:[1,0.45,1], ff:1, filling:false, temp:33, avgDaily:300, consumed:140, clock:10*60+30},
-  lowtank: {label:['الخزان ينفد', 'Tank running low'], icon:I.low, tank:19, moist:[27,45,50], line:[1,1,1], ff:1, filling:false, temp:32, avgDaily:320, consumed:260, clock:16*60},
+  lowtank: {label:['الخزان ينفد', 'Tank running low'], icon:I.low, tank:14, moist:[27,45,50], line:[1,1,1], ff:1, filling:false, temp:32, avgDaily:320, consumed:260, clock:16*60},
   filling: {label:['الصهريج يعبّئ الخزان', 'Tanker filling the tank'], icon:I.truck, tank:84, moist:[53,49,60], line:[1,1,1], ff:1, filling:true, temp:30, avgDaily:300, consumed:60, clock:7*60+40},
 };
 const heatOf = t => Math.max(0.6, 1 + (t - 30) / 10);
@@ -1395,7 +1395,7 @@ const HYPS = [
   {h:['قاعدة حد الخزان تمنع تشغيل المضخة دون ماء في كل المحاولات.', 'The tank-limit rule prevents the pump from running dry in every trial.'],
    h0:['تعمل المضخة أحيانًا رغم انخفاض الخزان تحت الحد.', 'The pump sometimes runs even though the tank is below the limit.'],
    test:['تفريغ الخزان تدريجيًا وتكرار التجربة عدة مرات.', 'Drain the tank gradually and repeat the trial several times.'],
-   measure:['هل توقفت المضخة عند ١٥٪ في كل مرة؟ وهل عمل تنبيه انخفاض مستوى المياه؟', 'Did the pump stop at 15% every time? Did the low water-level alert activate?'],
+   measure:['هل توقفت المضخة عند ١٠٪ في كل مرة؟ وهل عمل تنبيه انخفاض مستوى المياه؟', 'Did the pump stop at 10% every time? Did the low water-level alert activate?'],
    demos:[[['الخزان ينفد', 'Tank running low'], 'lowtank', null]],
    see:['اضغط «تقديم ساعة» وراقب المضخة تتوقف والتنبيه يعمل عند حد الحماية.', 'Press “Skip 1 hour” and watch the pump stop and the alert activate at the protection limit.']},
   {h:['صفارة الامتلاء تنطلق قبل فيضان الخزان بوقت يكفي السائق لإغلاق المحبس.', 'The full-tank siren sounds early enough before overflow for the driver to close the valve.'],
